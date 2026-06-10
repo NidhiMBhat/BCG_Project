@@ -1,0 +1,12 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv*
+venv/
+env/
+
+# Local data & generated results
+results/*.png
+live_bcg_output.csv
