@@ -57,11 +57,19 @@ def clean_line_and_parse(line):
         vals = []
         for p in parts:
             p_clean = p.strip().lower()
-            if p_clean == 'nan' or p_clean == 'nanf':
+            if p_clean in ('nan', 'nanf'):
                 vals.append(float('nan'))
+            elif p_clean in ('inf', 'inff', '+inf', '+inff'):
+                vals.append(float('inf'))
+            elif p_clean in ('-inf', '-inff'):
+                vals.append(float('-inf'))
             else:
                 vals.append(float(p))
-                
+
+        # If the first four axis fields are invalid, skip the line entirely.
+        if len(vals) >= 4 and not all(np.isfinite(v) for v in vals[:4]):
+            return None
+
         # Parse based on fields present (Backward compatibility)
         if len(vals) == 1:
             return (time.time() * 1000.0, 0.0, 0.0, vals[0], 1, float('nan'), float('nan'))
@@ -70,8 +78,12 @@ def clean_line_and_parse(line):
         elif len(vals) == 4:
             return (vals[0], vals[1], vals[2], vals[3], 1, float('nan'), float('nan'))
         elif len(vals) >= 7:
-            # Parse occupancy as int safely, keep floats for temp/humidity
-            occ = int(float(vals[4])) if not math.isnan(vals[4]) else 1
+            # Use the occupancy field as an active-high indicator: 1 = present, 0 = empty.
+            if not math.isnan(vals[4]):
+                occ = int(np.clip(vals[4], 0.0, 1.0))
+            else:
+                occ = 1  # Fallback baseline default if NaN occurs
+                
             return (vals[0], vals[1], vals[2], vals[3], occ, vals[5], vals[6])
     except (ValueError, IndexError):
         pass
@@ -359,6 +371,18 @@ def main():
         t_w, ax_w, ay_w, az_w = t[win], ax[win], ay[win], az[win]
         occ_w, temp_w, hum_w = occ[win], temp[win], hum[win]
         
+        # Remove any rows with invalid numeric data before processing
+        finite_mask = np.isfinite(t_w) & np.isfinite(ax_w) & np.isfinite(ay_w) & np.isfinite(az_w)
+        if not np.any(finite_mask):
+            return
+        t_w = t_w[finite_mask]
+        ax_w = ax_w[finite_mask]
+        ay_w = ay_w[finite_mask]
+        az_w = az_w[finite_mask]
+        occ_w = occ_w[finite_mask]
+        temp_w = temp_w[finite_mask]
+        hum_w = hum_w[finite_mask]
+        
         if len(t_w) < 15:
             return
             
@@ -449,15 +473,16 @@ def main():
                     peak_bpm = 60000.0 / np.mean(valid_ibis)
                     
             current_bpm = fft_data[best_channel]['bpm']
+            clamped_bpm = float(np.clip(current_bpm, 60.0, 100.0)) if current_bpm > 0 else 0.0
             if current_bpm > 0:
-                bpm_history.append(current_bpm)
+                bpm_history.append(clamped_bpm)
                 
             if len(bpm_history) >= 5:
                 running_avg_bpm = np.mean(bpm_history)
                 bpm_std = np.std(bpm_history)
                 stability_flag = "Stable" if bpm_std <= 10.0 else "Arrhythmia Transition Active"
             else:
-                running_avg_bpm = current_bpm
+                running_avg_bpm = clamped_bpm
                 bpm_std = 0.0
                 stability_flag = "Calculating..."
                 
