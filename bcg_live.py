@@ -79,10 +79,11 @@ def clean_line_and_parse(line):
             return (vals[0], vals[1], vals[2], vals[3], 1, float('nan'), float('nan'))
         elif len(vals) >= 7:
             # Use the occupancy field as an active-high indicator: 1 = present, 0 = empty.
+            # Invert the occupancy value (1 -> 0, 0 -> 1) to correct sensor output
             if not math.isnan(vals[4]):
-                occ = int(np.clip(vals[4], 0.0, 1.0))
+                occ = 1 - int(np.clip(vals[4], 0.0, 1.0))
             else:
-                occ = 1  # Fallback baseline default if NaN occurs
+                occ = 0  # Fallback baseline default if NaN occurs
                 
             return (vals[0], vals[1], vals[2], vals[3], occ, vals[5], vals[6])
     except (ValueError, IndexError):
