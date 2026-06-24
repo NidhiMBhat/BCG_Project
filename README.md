@@ -46,7 +46,14 @@ This generates:
 
 ## 📊 Live Rolling Dashboard (`bcg_live.py`)
 
-The dynamic dashboard updates a 2x2 grid in real-time, showing raw signals, filtered channels, active FFT spectra, and rolling diagnostics.
+The dynamic dashboard displays raw signals, filtered channels, active FFT spectra, and real-time health-monitoring diagnostics.
+
+### Upgraded AI Visual Cards
+- **AI Rhythm Prediction**: Displays current classification: **NORMAL** (Green status), **BRADYCARDIA** (Red alert), or **TACHYCARDIA** (Red alert).
+- **AI Confidence**: Displays classification confidence from 0% to 100%.
+- **Signal Quality (SQS)**: Shows signal-to-noise quality score.
+
+*Note: AI classification only triggers when occupancy is detected and a full 10-second data window is available. Otherwise, cards display "Waiting for Data".*
 
 ### Mode A: Monitor a Growing CSV (Simulation / Live Logging)
 If you are logging raw serial data into a CSV in the background:
@@ -62,10 +69,46 @@ python bcg_live.py --mode serial --port COM5 --baud 115200 --window 10 --log_fil
 
 ---
 
+## 🧠 Deep Learning Classifier Module
+
+The system uses a 1D Convolutional Neural Network (CNN) trained on the MIT-BIH Arrhythmia Database to categorize heart rhythms in real time.
+
+### 1. Dataset Preparation
+Downloads MIT-BIH records, segments them into 10-second windows resampled to 100 Hz, labels them based on annotations, and saves `X.npy` and `y.npy` to `/data`:
+```bash
+python training/dataset_preparation.py
+```
+
+### 2. CNN Model Training
+Loads prepared data, compiles the Conv1D classifier, trains with early stopping and learning rate reduction callbacks, and outputs evaluation graphs and metrics reports:
+```bash
+python training/train_cnn.py
+```
+This saves the trained networks to:
+- `/models/cnn_model.keras`
+- `/models/cnn_model.h5`
+
+Evaluation performance plots are placed in `/results`.
+
+### 3. Model Inference Engine
+Loads `cnn_model.keras` and handles real-time window prediction, returning labeled classification and prediction confidence values.
+
+---
+
 ## 📁 Repository Structure
 
 * [bcg_pipeline.py](file:///Users/shash/Downloads/IoT/BCG_Project/bcg_pipeline.py) - Post-hoc diagnostic analysis script.
-* [bcg_live.py](file:///Users/shash/Downloads/IoT/BCG_Project/bcg_live.py) - Live rolling dashboard.
+* [bcg_live.py](file:///Users/shash/Downloads/IoT/BCG_Project/bcg_live.py) - Live rolling dashboard with AI integration.
 * [process.py](file:///Users/shash/Downloads/IoT/BCG_Project/process.py) - Basic background serial logging script.
 * [requirements.txt](file:///Users/shash/Downloads/IoT/BCG_Project/requirements.txt) - Python package dependencies.
+* `/training`
+  * [dataset_preparation.py](file:///Users/shash/Downloads/IoT/BCG_Project/training/dataset_preparation.py) - Script to acquire and prepare MIT-BIH records.
+  * [train_cnn.py](file:///Users/shash/Downloads/IoT/BCG_Project/training/train_cnn.py) - Build, train, and validate the Conv1D model.
+* `/inference`
+  * [cnn_inference.py](file:///Users/shash/Downloads/IoT/BCG_Project/inference/cnn_inference.py) - Real-time wrapper to run model predictions.
+* `/models`
+  * `cnn_model.keras` / `cnn_model.h5` - Saved deep learning models.
+* `/data`
+  * `X.npy` / `y.npy` - Preprocessed numpy matrices for neural network training.
+* `/results` - Model training plots, report summaries, and performance evaluation metrics.
 * `.gitignore` - Standard configuration ignoring compiled cache and local logs.

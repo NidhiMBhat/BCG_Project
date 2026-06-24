@@ -10,3 +10,8 @@ env/
 # Local data & generated results
 results/*.png
 live_bcg_output.csv
+
+# Deep Learning Dataset & Model Weights
+data/
+models/*.h5
+models/*.keras

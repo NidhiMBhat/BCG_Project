@@ -25,6 +25,20 @@ try:
 except ImportError:
     serial = None
 
+# Import CNN Classifier
+try:
+    from inference.cnn_inference import ECGClassifier
+except ImportError:
+    ECGClassifier = None
+
+# Initialize classifier
+classifier = None
+if ECGClassifier is not None:
+    try:
+        classifier = ECGClassifier()
+    except Exception as e:
+        print(f"Error loading ECG Classifier: {e}")
+
 # Thread-safe queues for sharing data
 time_buffer = deque(maxlen=2000)
 ax_buffer = deque(maxlen=2000)
@@ -235,26 +249,34 @@ def main():
     # Establish GridSpec layout: 12 rows, 4 columns
     gs = fig.add_gridspec(12, 4, hspace=0.7, wspace=0.3)
     
-    # Top Row Cards (Occupancy, Temp, Humidity, Heart Rate)
+    # Top Row Cards
     ax_card_occ = fig.add_subplot(gs[0, 0])
     ax_card_temp = fig.add_subplot(gs[0, 1])
     ax_card_hum = fig.add_subplot(gs[0, 2])
-    ax_card_bpm = fig.add_subplot(gs[0, 3])
+    ax_card_sqs = fig.add_subplot(gs[0, 3])
     
-    # Plots (Middle / Bottom)
-    ax_raw = fig.add_subplot(gs[1:4, 0:3])
-    ax_filt = fig.add_subplot(gs[4:7, 0:3])
-    ax_fft = fig.add_subplot(gs[7:10, 0:3])
+    # Row 1 Cards
+    ax_card_bpm = fig.add_subplot(gs[1, 0])
+    ax_card_pred = fig.add_subplot(gs[1, 1:3])
+    ax_card_conf = fig.add_subplot(gs[1, 3])
     
-    # Side Diagnostic & Alert Panel
-    ax_panel = fig.add_subplot(gs[1:10, 3])
+    # Plots (Middle / Bottom) shifted down
+    ax_raw = fig.add_subplot(gs[2:5, 0:3])
+    ax_filt = fig.add_subplot(gs[5:8, 0:3])
+    ax_fft = fig.add_subplot(gs[8:11, 0:3])
+    
+    # Side Diagnostic & Alert Panel shifted down
+    ax_panel = fig.add_subplot(gs[2:11, 3])
     
     # Style cards
     for ax, title, color in [
         (ax_card_occ, "Occupancy Status", "#1abc9c"),
         (ax_card_temp, "Temperature", "#e67e22"),
         (ax_card_hum, "Humidity", "#3498db"),
-        (ax_card_bpm, "Heart Rate (BPM)", "#e74c3c")
+        (ax_card_sqs, "Signal Quality (SQS)", "#9b59b6"),
+        (ax_card_bpm, "Heart Rate (BPM)", "#e74c3c"),
+        (ax_card_pred, "AI Rhythm Prediction", "#f1c40f"),
+        (ax_card_conf, "AI Confidence", "#e67e22")
     ]:
         ax.set_facecolor('#161a22')
         ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
@@ -266,7 +288,15 @@ def main():
     occ_text = ax_card_occ.text(0.5, 0.45, "INITIALIZING", ha='center', va='center', fontsize=16, fontweight='bold')
     temp_text = ax_card_temp.text(0.5, 0.45, "--.- °C", ha='center', va='center', fontsize=16, fontweight='bold')
     hum_text = ax_card_hum.text(0.5, 0.45, "--.- %", ha='center', va='center', fontsize=16, fontweight='bold')
+    sqs_text = ax_card_sqs.text(0.5, 0.45, "--.-", ha='center', va='center', fontsize=16, fontweight='bold')
     bpm_text = ax_card_bpm.text(0.5, 0.45, "--.-", ha='center', va='center', fontsize=16, fontweight='bold')
+    pred_text = ax_card_pred.text(0.5, 0.45, "WAITING DATA", ha='center', va='center', fontsize=16, fontweight='bold')
+    conf_text = ax_card_conf.text(0.5, 0.45, "--.- %", ha='center', va='center', fontsize=16, fontweight='bold')
+    
+    # State tracking variables nonlocal to update_plot
+    last_inference_time = [0.0]
+    current_prediction = ["Waiting for Data"]
+    current_confidence = [0.0]
     
     # Setup Raw Signals Plot
     line_raw_x, = ax_raw.plot([], [], color='#e67e22', alpha=0.5, label='Raw AX')
@@ -447,12 +477,41 @@ def main():
         current_temp = temp_w[-1] if len(temp_w) > 0 else float('nan')
         current_hum = hum_w[-1] if len(hum_w) > 0 else float('nan')
         
+        # SQS Card Update
+        sqs_text.set_text(f"{quality_metrics[best_channel]['sqs']:.2f}")
+        
+        # Run CNN inference: Only run inference when occupancy detected and at least 10s of data is available
+        required_samples = int(10.0 * fs)
+        if current_occ == 1 and len(t_w) >= required_samples:
+            now_time = time.time()
+            if now_time - last_inference_time[0] >= 1.0:
+                last_inference_time[0] = now_time
+                if classifier is not None:
+                    try:
+                        inf_res = classifier.predict(best_sig, fs)
+                        current_prediction[0] = inf_res["prediction"]
+                        current_confidence[0] = inf_res["confidence"]
+                    except Exception as inf_err:
+                        print(f"Inference error: {inf_err}")
+        else:
+            current_prediction[0] = "Waiting for Data"
+            current_confidence[0] = 0.0
+            
+        pred_label = current_prediction[0]
+        
         # Trigger and compile Alerts
         alerts = []
         if not math.isnan(current_temp) and current_temp > 35.0:
             alerts.append("⚠️ High Temperature Alert")
         if not math.isnan(current_hum) and current_hum > 80.0:
             alerts.append("⚠️ High Humidity Alert")
+            
+        # Add AI Rhythm Alerts
+        if current_occ == 1:
+            if pred_label == "Bradycardia":
+                alerts.append("🚨 ALERT: Bradycardia Detected!")
+            elif pred_label == "Tachycardia":
+                alerts.append("🚨 ALERT: Tachycardia Detected!")
         
         # Occupancy Logic & Peak Detection Pausing
         if current_occ == 1:
@@ -501,6 +560,22 @@ def main():
             bpm_text.set_text("PAUSED")
             bpm_text.set_color('#7f8c8d')
             alerts.append("⚠️ Monitoring Paused (No Occupant)")
+            
+        # Update AI Prediction and Confidence Cards
+        pred_text.set_text(pred_label.upper())
+        if pred_label == "Normal":
+            pred_text.set_color('#2ecc71')  # Green status
+        elif pred_label in ("Bradycardia", "Tachycardia"):
+            pred_text.set_color('#e74c3c')  # Red alert
+        else:
+            pred_text.set_color('#7f8c8d')  # Gray waiting
+            
+        if pred_label == "Waiting for Data":
+            conf_text.set_text("WAITING DATA")
+            conf_text.set_color('#7f8c8d')
+        else:
+            conf_text.set_text(f"{current_confidence[0]:.1f}%")
+            conf_text.set_color('#e67e22')
 
         # Environment Comfort Classifications
         if math.isnan(current_temp):

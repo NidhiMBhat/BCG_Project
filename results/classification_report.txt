@@ -1,0 +1,9 @@
+              precision    recall  f1-score   support
+
+ Bradycardia       0.91      0.88      0.89       153
+      Normal       0.95      0.97      0.96      1001
+ Tachycardia       0.86      0.69      0.76       106
+
+    accuracy                           0.94      1260
+   macro avg       0.91      0.85      0.87      1260
+weighted avg       0.94      0.94      0.94      1260

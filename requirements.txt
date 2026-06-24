@@ -3,3 +3,6 @@ numpy
 scipy
 matplotlib
 pyserial
+tensorflow
+wfdb
+scikit-learn
