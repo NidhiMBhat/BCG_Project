@@ -220,17 +220,71 @@ def simulated_data_generator(csv_path):
         except Exception as e:
             time.sleep(0.1)
 
+client_ws_session = None
+
+def websocket_reader(url):
+    global client_ws_session, current_sim_mode
+    import websocket
+    import json
+    
+    def on_message(ws, message):
+        try:
+            data = json.loads(message)
+            if data.get("type") == "processed":
+                return
+            t_ms = data.get("time_ms")
+            if t_ms is not None:
+                with data_lock:
+                    time_buffer.append(t_ms / 1000.0)
+                    ax_buffer.append(data.get("ax", 0.0))
+                    ay_buffer.append(data.get("ay", 0.0))
+                    az_buffer.append(data.get("az", 0.0))
+                    occupancy_buffer.append(data.get("occupancy", 1))
+                    
+                    temp = data.get("temp")
+                    humidity = data.get("humidity")
+                    temp_buffer.append(temp if temp is not None else float('nan'))
+                    humidity_buffer.append(humidity if humidity is not None else float('nan'))
+        except Exception as e:
+            pass
+
+    def on_error(ws, error):
+        print(f"WS Client Error: {error}")
+
+    def on_close(ws, close_status_code, close_msg):
+        print("WS Client connection closed. Retrying...")
+        time.sleep(2)
+
+    def on_open(ws):
+        print("WS Client connected to Cloud successfully.")
+
+    while True:
+        try:
+            client_ws_session = websocket.WebSocketApp(
+                url,
+                on_open=on_open,
+                on_message=on_message,
+                on_error=on_error,
+                on_close=on_close
+            )
+            client_ws_session.run_forever()
+        except Exception as e:
+            time.sleep(2)
+
 def main():
     parser = argparse.ArgumentParser(description="Upgraded 3-Axis BCG Live Dashboard")
-    parser.add_argument("--mode", type=str, choices=['serial'], default='serial', help="Serial mode connection loop")
+    parser.add_argument("--mode", type=str, choices=['serial', 'websocket'], default='serial', help="Connection mode")
+    parser.add_argument("--url", type=str, default="ws://127.0.0.1:8000/ws/client", help="Cloud WebSocket server endpoint")
     parser.add_argument("--port", type=str, default="COM5", help="Serial port target link channel")
     parser.add_argument("--baud", type=int, default=115200, help="Serial baud rate config setting")
     parser.add_argument("--log_file", type=str, default="live_bcg_output.csv", help="CSV path target backup logs")
     parser.add_argument("--window", type=float, default=10.0, help="Rolling window frame layout size viewport")
     args = parser.parse_args()
     
-    # Start reader thread (will fall back to simulation if port is missing/fails)
-    thread = threading.Thread(target=serial_reader_and_logger, args=(args.port, args.baud, args.log_file), daemon=True)
+    if args.mode == 'websocket':
+        thread = threading.Thread(target=websocket_reader, args=(args.url,), daemon=True)
+    else:
+        thread = threading.Thread(target=serial_reader_and_logger, args=(args.port, args.baud, args.log_file), daemon=True)
     thread.start()
     
     print("Waiting for signal buffers to establish connections...")
@@ -339,23 +393,38 @@ def main():
     
     # Control Buttons Handler
     def set_mode_live(event):
-        global serial_session, current_sim_mode
+        global serial_session, client_ws_session, current_sim_mode
         current_sim_mode = 'N'
-        if serial_session and serial_session.is_open:
+        if args.mode == 'websocket' and client_ws_session:
+            try:
+                client_ws_session.send('N')
+            except Exception as ex:
+                print(f"Error sending command: {ex}")
+        elif serial_session and serial_session.is_open:
             serial_session.write(b'N')
             print("Command sent: Resuming Live MPU6050 Capture System Monitoring.")
 
     def set_mode_brady(event):
-        global serial_session, current_sim_mode
+        global serial_session, client_ws_session, current_sim_mode
         current_sim_mode = 'B'
-        if serial_session and serial_session.is_open:
+        if args.mode == 'websocket' and client_ws_session:
+            try:
+                client_ws_session.send('B')
+            except Exception as ex:
+                print(f"Error sending command: {ex}")
+        elif serial_session and serial_session.is_open:
             serial_session.write(b'B')
             print("Command sent: Injected Bradycardia Arrhythmia Model Target (42 BPM).")
 
     def set_mode_tachy(event):
-        global serial_session, current_sim_mode
+        global serial_session, client_ws_session, current_sim_mode
         current_sim_mode = 'T'
-        if serial_session and serial_session.is_open:
+        if args.mode == 'websocket' and client_ws_session:
+            try:
+                client_ws_session.send('T')
+            except Exception as ex:
+                print(f"Error sending command: {ex}")
+        elif serial_session and serial_session.is_open:
             serial_session.write(b'T')
             print("Command sent: Injected Tachycardia Arrhythmia Model Target (145 BPM).")
 

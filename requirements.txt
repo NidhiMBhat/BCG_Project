@@ -6,3 +6,8 @@ pyserial
 tensorflow
 wfdb
 scikit-learn
+fastapi
+uvicorn
+websockets
+websocket-client
+psycopg2-binary

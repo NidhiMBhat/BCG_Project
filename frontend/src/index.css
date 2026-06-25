@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@import 'uplot/dist/uPlot.min.css';
+
+body {
+  margin: 0;
+  background-color: #0d1117;
+  color: #ffffff;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Custom styling to match Matplotlib's console style */
+.diagnostic-panel {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.uplot .u-title {
+  color: #f39c12 !important;
+  font-weight: bold;
+}
+.u-legend {
+  color: #a0aec0 !important;
+  font-size: 12px;
+}
+.u-legend td {
+  padding: 2px 6px !important;
+}
