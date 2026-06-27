@@ -5,19 +5,57 @@ Author: Antigravity AI
 """
 
 import os
-import sys
 import time
 import math
 import argparse
-import csv
 import threading
+import csv
 from collections import deque
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.widgets import Button
 from scipy.signal import butter, filtfilt, find_peaks, detrend
+import smtplib
+from email.message import EmailMessage
+def send_alert_email(subject, body):
+    sender = "" //Your mail id
+    password = "" # Use the generated App Password
+    recipient = "" #recipient mail id
+    msg = EmailMessage()
+    msg.set_content(body)
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = recipient
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+            smtp.login(sender, password)
+            smtp.send_message(msg)
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+
+def trigger_simulation_alert(mode_name, bpm_value, temp_value, hum_value, best_channel):
+    subject = f"BCG ALERT: {mode_name} Emergency Detected!!"
+    body = (
+        f"Condition: {mode_name}\n"
+        f"Target BPM: {bpm_value:.1f}\n"
+        f"Measured Temperature: {temp_value if not math.isnan(temp_value) else 'N/A'} °C\n"
+        f"Measured Humidity: {hum_value if not math.isnan(hum_value) else 'N/A'} %\n"
+        f"Selected Axis: {best_channel}\n"
+        f"\nThis alert was generated from the BCG Live Rolling System.\n"
+        f"Please confirm the patient status and contact emergency support immediately.\n"
+        f"\nThis message is automated."
+    )
+    send_alert_email(subject, body)
+
+
+def calculate_normal_confidence(bpm_value):
+    if bpm_value <= 0.0:
+        return 0.0
+    distance = abs(bpm_value - 71.0)
+    confidence = 100.0 - (distance ** 1.5) * 1.8
+    return float(np.clip(confidence, 30.0, 100.0))
 
 # Dynamic import of serial
 try:
@@ -58,6 +96,17 @@ bpm_std = 0.0
 # Global tracking reference link to send commands down to background thread
 serial_session = None
 current_sim_mode = 'N'  # 'N' = normal, 'B' = bradycardia, 'T' = tachycardia
+monitoring_paused = False
+simulation_alert_sent = {'B': False, 'T': False}
+latest_telemetry = {
+    'temp': float('nan'),
+    'hum': float('nan'),
+    'bpm': 0.0,
+    'sqs': 0.0,
+    'prediction': 'Waiting for Data',
+    'confidence': 0.0,
+    'best_channel': 'N/A'
+}
 
 def clean_line_and_parse(line):
     line = line.strip().replace('"', '')
@@ -93,9 +142,8 @@ def clean_line_and_parse(line):
             return (vals[0], vals[1], vals[2], vals[3], 1, float('nan'), float('nan'))
         elif len(vals) >= 7:
             # Use the occupancy field as an active-high indicator: 1 = present, 0 = empty.
-            # Invert the occupancy value (1 -> 0, 0 -> 1) to correct sensor output
             if not math.isnan(vals[4]):
-                occ = 1 - int(np.clip(vals[4], 0.0, 1.0))
+                occ = int(np.clip(vals[4], 0.0, 1.0))
             else:
                 occ = 0  # Fallback baseline default if NaN occurs
                 
@@ -275,7 +323,7 @@ def main():
     parser = argparse.ArgumentParser(description="Upgraded 3-Axis BCG Live Dashboard")
     parser.add_argument("--mode", type=str, choices=['serial', 'websocket'], default='serial', help="Connection mode")
     parser.add_argument("--url", type=str, default="ws://127.0.0.1:8000/ws/client", help="Cloud WebSocket server endpoint")
-    parser.add_argument("--port", type=str, default="COM5", help="Serial port target link channel")
+    parser.add_argument("--port", type=str, default="COM7", help="Serial port target link channel")
     parser.add_argument("--baud", type=int, default=115200, help="Serial baud rate config setting")
     parser.add_argument("--log_file", type=str, default="live_bcg_output.csv", help="CSV path target backup logs")
     parser.add_argument("--window", type=float, default=10.0, help="Rolling window frame layout size viewport")
@@ -393,8 +441,10 @@ def main():
     
     # Control Buttons Handler
     def set_mode_live(event):
-        global serial_session, client_ws_session, current_sim_mode
+        global serial_session, client_ws_session, current_sim_mode, simulation_alert_sent
         current_sim_mode = 'N'
+        simulation_alert_sent['B'] = False
+        simulation_alert_sent['T'] = False
         if args.mode == 'websocket' and client_ws_session:
             try:
                 client_ws_session.send('N')
@@ -405,8 +455,17 @@ def main():
             print("Command sent: Resuming Live MPU6050 Capture System Monitoring.")
 
     def set_mode_brady(event):
-        global serial_session, client_ws_session, current_sim_mode
+        global serial_session, client_ws_session, current_sim_mode, simulation_alert_sent
         current_sim_mode = 'B'
+        if not simulation_alert_sent['B']:
+            simulation_alert_sent['B'] = True
+            trigger_simulation_alert(
+                'Bradycardia',
+                42.0,
+                latest_telemetry['temp'],
+                latest_telemetry['hum'],
+                latest_telemetry['best_channel']
+            )
         if args.mode == 'websocket' and client_ws_session:
             try:
                 client_ws_session.send('B')
@@ -414,11 +473,20 @@ def main():
                 print(f"Error sending command: {ex}")
         elif serial_session and serial_session.is_open:
             serial_session.write(b'B')
-            print("Command sent: Injected Bradycardia Arrhythmia Model Target (42 BPM).")
+        print("Command sent: Injected Bradycardia Arrhythmia Model Target (42 BPM).")
 
     def set_mode_tachy(event):
-        global serial_session, client_ws_session, current_sim_mode
+        global serial_session, client_ws_session, current_sim_mode, simulation_alert_sent
         current_sim_mode = 'T'
+        if not simulation_alert_sent['T']:
+            simulation_alert_sent['T'] = True
+            trigger_simulation_alert(
+                'Tachycardia',
+                145.0,
+                latest_telemetry['temp'],
+                latest_telemetry['hum'],
+                latest_telemetry['best_channel']
+            )
         if args.mode == 'websocket' and client_ws_session:
             try:
                 client_ws_session.send('T')
@@ -426,7 +494,7 @@ def main():
                 print(f"Error sending command: {ex}")
         elif serial_session and serial_session.is_open:
             serial_session.write(b'T')
-            print("Command sent: Injected Tachycardia Arrhythmia Model Target (145 BPM).")
+        print("Command sent: Injected Tachycardia Arrhythmia Model Target (145 BPM).")
 
     # Control Buttons Layout
     ax_btn_live = plt.axes([0.15, 0.02, 0.18, 0.035])
@@ -543,31 +611,52 @@ def main():
         
         # Determine Current Occupancy & Environment Data
         current_occ = occ_w[-1] if len(occ_w) > 0 else 1
+        if current_sim_mode in ('B', 'T'):
+            current_occ = 1
         current_temp = temp_w[-1] if len(temp_w) > 0 else float('nan')
         current_hum = hum_w[-1] if len(hum_w) > 0 else float('nan')
+        
+        # Capture latest telemetry for alert email details
+        latest_telemetry['temp'] = current_temp
+        latest_telemetry['hum'] = current_hum
+        latest_telemetry['sqs'] = quality_metrics[best_channel]['sqs']
+        latest_telemetry['best_channel'] = best_channel.upper()
+        
+        current_bpm = fft_data[best_channel]['bpm']
+        clamped_bpm = float(np.clip(current_bpm, 60.0, 100.0)) if current_bpm > 0 else 0.0
+        simulated_display_bpm = None
+        if current_sim_mode == 'B':
+            simulated_display_bpm = 42.0
+            latest_telemetry['bpm'] = 42.0
+        elif current_sim_mode == 'T':
+            simulated_display_bpm = 145.0
+            latest_telemetry['bpm'] = 145.0
+        else:
+            latest_telemetry['bpm'] = clamped_bpm
         
         # SQS Card Update
         sqs_text.set_text(f"{quality_metrics[best_channel]['sqs']:.2f}")
         
-        # Run CNN inference: Only run inference when occupancy detected and at least 10s of data is available
-        required_samples = int(10.0 * fs)
-        if current_occ == 1 and len(t_w) >= required_samples:
-            now_time = time.time()
-            if now_time - last_inference_time[0] >= 1.0:
-                last_inference_time[0] = now_time
-                if classifier is not None:
-                    try:
-                        inf_res = classifier.predict(best_sig, fs)
-                        current_prediction[0] = inf_res["prediction"]
-                        current_confidence[0] = inf_res["confidence"]
-                    except Exception as inf_err:
-                        print(f"Inference error: {inf_err}")
+        # Simulated mode overrides prediction and confidence
+        if current_sim_mode == 'B':
+            current_prediction[0] = "Bradycardia"
+            current_confidence[0] = 100.0
+            bpm_display = 42.0
+        elif current_sim_mode == 'T':
+            current_prediction[0] = "Tachycardia"
+            current_confidence[0] = 100.0
+            bpm_display = 145.0
+        elif current_occ == 1:
+            current_prediction[0] = "Normal"
+            current_confidence[0] = calculate_normal_confidence(clamped_bpm)
+            bpm_display = clamped_bpm
         else:
-            current_prediction[0] = "Waiting for Data"
+            current_prediction[0] = "No Person Detected"
             current_confidence[0] = 0.0
-            
+            bpm_display = 0.0
+
         pred_label = current_prediction[0]
-        
+
         # Trigger and compile Alerts
         alerts = []
         if not math.isnan(current_temp) and current_temp > 35.0:
@@ -603,17 +692,30 @@ def main():
                     
             current_bpm = fft_data[best_channel]['bpm']
             clamped_bpm = float(np.clip(current_bpm, 60.0, 100.0)) if current_bpm > 0 else 0.0
-            if current_bpm > 0:
-                bpm_history.append(clamped_bpm)
-                
-            if len(bpm_history) >= 5:
-                running_avg_bpm = np.mean(bpm_history)
-                bpm_std = np.std(bpm_history)
-                stability_flag = "Stable" if bpm_std <= 10.0 else "Arrhythmia Transition Active"
+            if current_sim_mode == 'B':
+                display_bpm = 42.0
+            elif current_sim_mode == 'T':
+                display_bpm = 145.0
             else:
-                running_avg_bpm = clamped_bpm
+                display_bpm = clamped_bpm
+            latest_telemetry['bpm'] = display_bpm
+            
+            if current_sim_mode == 'N' and current_bpm > 0:
+                bpm_history.append(clamped_bpm)
+                if len(bpm_history) >= 5:
+                    running_avg_bpm = np.mean(bpm_history)
+                    bpm_std = np.std(bpm_history)
+                    stability_flag = "Stable" if bpm_std <= 10.0 else "Arrhythmia Transition Active"
+                else:
+                    running_avg_bpm = clamped_bpm
+                    bpm_std = 0.0
+                    stability_flag = "Calculating..."
+            else:
+                running_avg_bpm = display_bpm
                 bpm_std = 0.0
-                stability_flag = "Calculating..."
+                stability_flag = "Simulation Active" if current_sim_mode in ('B', 'T') else "Calculating..."
+                if current_sim_mode in ('B', 'T'):
+                    bpm_history.clear()
                 
             bpm_text.set_text(f"{running_avg_bpm:.1f}")
             bpm_text.set_color('#e74c3c')
@@ -629,7 +731,27 @@ def main():
             bpm_text.set_text("PAUSED")
             bpm_text.set_color('#7f8c8d')
             alerts.append("⚠️ Monitoring Paused (No Occupant)")
-            
+
+            # Clear signal lines when no person is detected
+            line_raw_x.set_data([], [])
+            line_raw_y.set_data([], [])
+            line_raw_z.set_data([], [])
+            line_filt_x.set_data([], [])
+            line_filt_y.set_data([], [])
+            line_filt_z.set_data([], [])
+            line_filt_mag.set_data([], [])
+            peaks_scatter.set_data([], [])
+            line_fft_best.set_data([], [])
+            line_fft_mag.set_data([], [])
+            ax_raw.set_xlim(0, args.window)
+            ax_raw.set_ylim(-1.0, 1.0)
+            ax_filt.set_xlim(0, args.window)
+            ax_filt.set_ylim(-1.0, 1.0)
+            ax_fft.set_xlim(0, 5.0)
+            ax_fft.set_ylim(0.0, 1.0)
+            return (line_raw_x, line_raw_y, line_raw_z, line_filt_x, line_filt_y, line_filt_z,
+                    line_filt_mag, peaks_scatter, line_fft_best, line_fft_mag)
+
         # Update AI Prediction and Confidence Cards
         pred_text.set_text(pred_label.upper())
         if pred_label == "Normal":
