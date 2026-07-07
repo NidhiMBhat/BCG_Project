@@ -10,6 +10,7 @@ import math
 import argparse
 import threading
 import csv
+import socket
 from collections import deque
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,9 +20,9 @@ from scipy.signal import butter, filtfilt, find_peaks, detrend
 import smtplib
 from email.message import EmailMessage
 def send_alert_email(subject, body):
-    sender = "" //Your mail id
+    sender = "raoshashwati@gmail.com" 
     password = "" # Use the generated App Password
-    recipient = "" #recipient mail id
+    recipient = "raoshashwati@gmail.com" #recipient mail id
     msg = EmailMessage()
     msg.set_content(body)
     msg['Subject'] = subject
@@ -57,11 +58,14 @@ def calculate_normal_confidence(bpm_value):
     confidence = 100.0 - (distance ** 1.5) * 1.8
     return float(np.clip(confidence, 30.0, 100.0))
 
-# Dynamic import of serial
-try:
-    import serial
-except ImportError:
-    serial = None
+# ==============================================================================
+# TCP SERVER CONFIGURATION
+# ==============================================================================
+TCP_HOST = "0.0.0.0"
+TCP_PORT = 6000
+
+active_client_socket = None
+client_lock = threading.Lock()
 
 # Import CNN Classifier
 try:
@@ -152,52 +156,109 @@ def clean_line_and_parse(line):
         pass
     return None
 
-def serial_reader_and_logger(port, baudrate, csv_path):
-    global serial_session
-    if serial is None:
-        print("Error: 'pyserial' is not installed. Falling back to local simulation mode.")
-        sim_thread = threading.Thread(target=simulated_data_generator, args=(csv_path,), daemon=True)
-        sim_thread.start()
-        return
-        
-    print(f"Connecting to serial port {port} at {baudrate} baud...")
-    try:
-        serial_session = serial.Serial(port, baudrate, timeout=1.0)
-        serial_session.reset_input_buffer()
-        print("Serial connection established successfully.")
-    except Exception as e:
-        print(f"Error opening serial port: {e}. Falling back to local simulation mode.")
-        sim_thread = threading.Thread(target=simulated_data_generator, args=(csv_path,), daemon=True)
-        sim_thread.start()
-        return
-        
+def tcp_server_reader(host, port, csv_path):
+    global active_client_socket
+    
     write_header = not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0
     csv_file = open(csv_path, 'a', newline='')
     csv_writer = csv.writer(csv_file)
     if write_header:
         csv_writer.writerow(['time_ms', 'ax', 'ay', 'az', 'occupancy', 'temp', 'humidity'])
         csv_file.flush()
-        
+
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    
+    try:
+        server_socket.bind((host, port))
+        server_socket.listen(5)
+        print(f"TCP Server listening on {host}:{port}...")
+    except Exception as e:
+        print(f"Error binding TCP socket: {e}")
+        return
+
     while True:
         try:
-            if serial_session.in_waiting > 0:
-                line = serial_session.readline().decode('utf-8', errors='ignore')
-                parsed = clean_line_and_parse(line)
-                if parsed:
-                    t_ms, ax, ay, az, occupancy, temp, humidity = parsed
-                    csv_writer.writerow([int(t_ms), ax, ay, az, occupancy, temp, humidity])
-                    csv_file.flush()
+            client_sock, client_addr = server_socket.accept()
+            print(f"Accepted TCP connection from {client_addr}")
+            
+            with client_lock:
+                active_client_socket = client_sock
+                
+            buffer = ""
+            current_packet_str = ""
+            while True:
+                try:
+                    data = client_sock.recv(4096)
+                    if not data:
+                        print("Client disconnected.")
+                        break
                     
-                    with data_lock:
-                        time_buffer.append(t_ms / 1000.0)
-                        ax_buffer.append(ax)
-                        ay_buffer.append(ay)
-                        az_buffer.append(az)
-                        occupancy_buffer.append(occupancy)
-                        temp_buffer.append(temp)
-                        humidity_buffer.append(humidity)
+                    buffer += data.decode('utf-8', errors='ignore')
+                    while "\n" in buffer:
+                        line, buffer = buffer.split("\n", 1)
+                        line_clean = line.strip()
+                        if not line_clean:
+                            continue
+                        
+                        if not current_packet_str:
+                            current_packet_str = line_clean
+                        else:
+                            if line_clean.startswith(',') or current_packet_str.count(',') < 6:
+                                current_packet_str += line_clean
+                            else:
+                                # We have a new packet starting; process the previous one first
+                                parsed = clean_line_and_parse(current_packet_str)
+                                if parsed:
+                                    t_ms, ax, ay, az, occupancy, temp, humidity = parsed
+                                    csv_writer.writerow([int(t_ms), ax, ay, az, occupancy, temp, humidity])
+                                    csv_file.flush()
+                                    with data_lock:
+                                        time_buffer.append(t_ms / 1000.0)
+                                        ax_buffer.append(ax)
+                                        ay_buffer.append(ay)
+                                        az_buffer.append(az)
+                                        occupancy_buffer.append(occupancy)
+                                        temp_buffer.append(temp)
+                                        humidity_buffer.append(humidity)
+                                current_packet_str = line_clean
+                        
+                        if current_packet_str.count(',') >= 6:
+                            parts = current_packet_str.split(',')
+                            while len(parts) >= 7:
+                                single_packet = ",".join(parts[:7])
+                                parsed = clean_line_and_parse(single_packet)
+                                if parsed:
+                                    t_ms, ax, ay, az, occupancy, temp, humidity = parsed
+                                    csv_writer.writerow([int(t_ms), ax, ay, az, occupancy, temp, humidity])
+                                    csv_file.flush()
+                                    with data_lock:
+                                        time_buffer.append(t_ms / 1000.0)
+                                        ax_buffer.append(ax)
+                                        ay_buffer.append(ay)
+                                        az_buffer.append(az)
+                                        occupancy_buffer.append(occupancy)
+                                        temp_buffer.append(temp)
+                                        humidity_buffer.append(humidity)
+                                parts = parts[7:]
+                            current_packet_str = ",".join(parts)
+                except socket.error as e:
+                    print(f"Socket communication error: {e}")
+                    break
+                except Exception as e:
+                    print(f"Error processing client data: {e}")
+                    
         except Exception as e:
-            time.sleep(0.1)
+            print(f"Error accepting connection: {e}")
+            time.sleep(1)
+        finally:
+            with client_lock:
+                if active_client_socket:
+                    try:
+                        active_client_socket.close()
+                    except Exception:
+                        pass
+                    active_client_socket = None
 
 def simulated_data_generator(csv_path):
     print("Simulated Data Generator running...")
@@ -268,79 +329,20 @@ def simulated_data_generator(csv_path):
         except Exception as e:
             time.sleep(0.1)
 
-client_ws_session = None
-
-def websocket_reader(url):
-    global client_ws_session, current_sim_mode
-    import websocket
-    import json
-    
-    def on_message(ws, message):
-        try:
-            data = json.loads(message)
-            if data.get("type") == "processed":
-                return
-            t_ms = data.get("time_ms")
-            if t_ms is not None:
-                with data_lock:
-                    time_buffer.append(t_ms / 1000.0)
-                    ax_buffer.append(data.get("ax", 0.0))
-                    ay_buffer.append(data.get("ay", 0.0))
-                    az_buffer.append(data.get("az", 0.0))
-                    occupancy_buffer.append(data.get("occupancy", 1))
-                    
-                    temp = data.get("temp")
-                    humidity = data.get("humidity")
-                    temp_buffer.append(temp if temp is not None else float('nan'))
-                    humidity_buffer.append(humidity if humidity is not None else float('nan'))
-        except Exception as e:
-            pass
-
-    def on_error(ws, error):
-        print(f"WS Client Error: {error}")
-
-    def on_close(ws, close_status_code, close_msg):
-        print("WS Client connection closed. Retrying...")
-        time.sleep(2)
-
-    def on_open(ws):
-        print("WS Client connected to Cloud successfully.")
-
-    while True:
-        try:
-            client_ws_session = websocket.WebSocketApp(
-                url,
-                on_open=on_open,
-                on_message=on_message,
-                on_error=on_error,
-                on_close=on_close
-            )
-            client_ws_session.run_forever()
-        except Exception as e:
-            time.sleep(2)
+# Removed Websocket Reader logic
 
 def main():
     parser = argparse.ArgumentParser(description="Upgraded 3-Axis BCG Live Dashboard")
-    parser.add_argument("--mode", type=str, choices=['serial', 'websocket'], default='serial', help="Connection mode")
-    parser.add_argument("--url", type=str, default="ws://127.0.0.1:8000/ws/client", help="Cloud WebSocket server endpoint")
-    parser.add_argument("--port", type=str, default="COM7", help="Serial port target link channel")
-    parser.add_argument("--baud", type=int, default=115200, help="Serial baud rate config setting")
+    parser.add_argument("--host", type=str, default=TCP_HOST, help="TCP server host interface")
+    parser.add_argument("--port", type=int, default=TCP_PORT, help="TCP server port channel")
     parser.add_argument("--log_file", type=str, default="live_bcg_output.csv", help="CSV path target backup logs")
     parser.add_argument("--window", type=float, default=10.0, help="Rolling window frame layout size viewport")
     args = parser.parse_args()
     
-    if args.mode == 'websocket':
-        thread = threading.Thread(target=websocket_reader, args=(args.url,), daemon=True)
-    else:
-        thread = threading.Thread(target=serial_reader_and_logger, args=(args.port, args.baud, args.log_file), daemon=True)
+    thread = threading.Thread(target=tcp_server_reader, args=(args.host, args.port, args.log_file), daemon=True)
     thread.start()
     
-    print("Waiting for signal buffers to establish connections...")
-    while True:
-        with data_lock:
-            if len(time_buffer) > 40:
-                break
-        time.sleep(0.2)
+    print("Initializing signal buffers and displaying dashboard...")
         
     plt.style.use('dark_background')
     
@@ -441,21 +443,20 @@ def main():
     
     # Control Buttons Handler
     def set_mode_live(event):
-        global serial_session, client_ws_session, current_sim_mode, simulation_alert_sent
+        global active_client_socket, current_sim_mode, simulation_alert_sent
         current_sim_mode = 'N'
         simulation_alert_sent['B'] = False
         simulation_alert_sent['T'] = False
-        if args.mode == 'websocket' and client_ws_session:
-            try:
-                client_ws_session.send('N')
-            except Exception as ex:
-                print(f"Error sending command: {ex}")
-        elif serial_session and serial_session.is_open:
-            serial_session.write(b'N')
-            print("Command sent: Resuming Live MPU6050 Capture System Monitoring.")
+        with client_lock:
+            if active_client_socket:
+                try:
+                    active_client_socket.sendall(b'N\n')
+                    print("Command sent: Resuming Live MPU6050 Capture System Monitoring.")
+                except Exception as ex:
+                    print(f"Error sending command: {ex}")
 
     def set_mode_brady(event):
-        global serial_session, client_ws_session, current_sim_mode, simulation_alert_sent
+        global active_client_socket, current_sim_mode, simulation_alert_sent
         current_sim_mode = 'B'
         if not simulation_alert_sent['B']:
             simulation_alert_sent['B'] = True
@@ -466,17 +467,16 @@ def main():
                 latest_telemetry['hum'],
                 latest_telemetry['best_channel']
             )
-        if args.mode == 'websocket' and client_ws_session:
-            try:
-                client_ws_session.send('B')
-            except Exception as ex:
-                print(f"Error sending command: {ex}")
-        elif serial_session and serial_session.is_open:
-            serial_session.write(b'B')
-        print("Command sent: Injected Bradycardia Arrhythmia Model Target (42 BPM).")
+        with client_lock:
+            if active_client_socket:
+                try:
+                    active_client_socket.sendall(b'B\n')
+                    print("Command sent: Injected Bradycardia Arrhythmia Model Target (42 BPM).")
+                except Exception as ex:
+                    print(f"Error sending command: {ex}")
 
     def set_mode_tachy(event):
-        global serial_session, client_ws_session, current_sim_mode, simulation_alert_sent
+        global active_client_socket, current_sim_mode, simulation_alert_sent
         current_sim_mode = 'T'
         if not simulation_alert_sent['T']:
             simulation_alert_sent['T'] = True
@@ -487,14 +487,13 @@ def main():
                 latest_telemetry['hum'],
                 latest_telemetry['best_channel']
             )
-        if args.mode == 'websocket' and client_ws_session:
-            try:
-                client_ws_session.send('T')
-            except Exception as ex:
-                print(f"Error sending command: {ex}")
-        elif serial_session and serial_session.is_open:
-            serial_session.write(b'T')
-        print("Command sent: Injected Tachycardia Arrhythmia Model Target (145 BPM).")
+        with client_lock:
+            if active_client_socket:
+                try:
+                    active_client_socket.sendall(b'T\n')
+                    print("Command sent: Injected Tachycardia Arrhythmia Model Target (145 BPM).")
+                except Exception as ex:
+                    print(f"Error sending command: {ex}")
 
     # Control Buttons Layout
     ax_btn_live = plt.axes([0.15, 0.02, 0.18, 0.035])
@@ -510,8 +509,11 @@ def main():
     btn_tachy.on_clicked(set_mode_tachy)
 
     with data_lock:
-        dt = np.median(np.diff(list(time_buffer)))
-        fs = 1.0 / dt if dt > 0 else 100.0
+        if len(time_buffer) >= 2:
+            dt = np.median(np.diff(list(time_buffer)))
+            fs = 1.0 / dt if dt > 0 else 100.0
+        else:
+            fs = 100.0
         
     nyq = 0.5 * fs
     b, a = butter(4, [0.8 / nyq, 4.0 / nyq], btype='band')

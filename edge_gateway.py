@@ -49,7 +49,7 @@ def clean_line_and_parse(line):
             return (vals[0], vals[1], vals[2], vals[3], 1, float('nan'), float('nan'))
         elif len(vals) >= 7:
             if not math.isnan(vals[4]):
-                occ = 1 - int(np.clip(vals[4], 0.0, 1.0))
+                occ = int(np.clip(vals[4], 0.0, 1.0))
             else:
                 occ = 0
             return (vals[0], vals[1], vals[2], vals[3], occ, vals[5], vals[6])
@@ -114,6 +114,8 @@ def start_ws_sender(ws_url, port, baudrate, mode):
                                     "humidity": humidity if np.isfinite(humidity) else None
                                 }
                                 ws.send(json.dumps(payload))
+                        else:
+                            time.sleep(0.01)
                     except Exception as e:
                         time.sleep(0.01)
             else:
