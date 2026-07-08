@@ -61,8 +61,8 @@ def calculate_normal_confidence(bpm_value):
 # ==============================================================================
 # TCP SERVER CONFIGURATION
 # ==============================================================================
-TCP_HOST = "0.0.0.0"
-TCP_PORT = 6000
+TCP_HOST = "192.168.137.150"
+TCP_PORT = 5000
 
 active_client_socket = None
 client_lock = threading.Lock()
@@ -156,6 +156,42 @@ def clean_line_and_parse(line):
         pass
     return None
 
+def handle_client_connection(client_sock, csv_writer, csv_file):
+    buffer = ""
+    while True:
+        try:
+            data = client_sock.recv(4096)
+            if not data:
+                print("Connection closed by peer.")
+                break
+            
+            buffer += data.decode('utf-8', errors='ignore')
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                line_clean = line.strip()
+                if not line_clean:
+                    continue
+                
+                parsed = clean_line_and_parse(line_clean)
+                if parsed:
+                    t_ms, ax, ay, az, occupancy, temp, humidity = parsed
+                    csv_writer.writerow([int(t_ms), ax, ay, az, occupancy, temp, humidity])
+                    csv_file.flush()
+                    with data_lock:
+                        time_buffer.append(t_ms / 1000.0)
+                        ax_buffer.append(ax)
+                        ay_buffer.append(ay)
+                        az_buffer.append(az)
+                        occupancy_buffer.append(occupancy)
+                        temp_buffer.append(temp)
+                        humidity_buffer.append(humidity)
+        except socket.error as e:
+            print(f"Socket communication error: {e}")
+            break
+        except Exception as e:
+            print(f"Error processing connection data: {e}")
+            break
+
 def tcp_server_reader(host, port, csv_path):
     global active_client_socket
     
@@ -185,68 +221,7 @@ def tcp_server_reader(host, port, csv_path):
             with client_lock:
                 active_client_socket = client_sock
                 
-            buffer = ""
-            current_packet_str = ""
-            while True:
-                try:
-                    data = client_sock.recv(4096)
-                    if not data:
-                        print("Client disconnected.")
-                        break
-                    
-                    buffer += data.decode('utf-8', errors='ignore')
-                    while "\n" in buffer:
-                        line, buffer = buffer.split("\n", 1)
-                        line_clean = line.strip()
-                        if not line_clean:
-                            continue
-                        
-                        if not current_packet_str:
-                            current_packet_str = line_clean
-                        else:
-                            if line_clean.startswith(',') or current_packet_str.count(',') < 6:
-                                current_packet_str += line_clean
-                            else:
-                                # We have a new packet starting; process the previous one first
-                                parsed = clean_line_and_parse(current_packet_str)
-                                if parsed:
-                                    t_ms, ax, ay, az, occupancy, temp, humidity = parsed
-                                    csv_writer.writerow([int(t_ms), ax, ay, az, occupancy, temp, humidity])
-                                    csv_file.flush()
-                                    with data_lock:
-                                        time_buffer.append(t_ms / 1000.0)
-                                        ax_buffer.append(ax)
-                                        ay_buffer.append(ay)
-                                        az_buffer.append(az)
-                                        occupancy_buffer.append(occupancy)
-                                        temp_buffer.append(temp)
-                                        humidity_buffer.append(humidity)
-                                current_packet_str = line_clean
-                        
-                        if current_packet_str.count(',') >= 6:
-                            parts = current_packet_str.split(',')
-                            while len(parts) >= 7:
-                                single_packet = ",".join(parts[:7])
-                                parsed = clean_line_and_parse(single_packet)
-                                if parsed:
-                                    t_ms, ax, ay, az, occupancy, temp, humidity = parsed
-                                    csv_writer.writerow([int(t_ms), ax, ay, az, occupancy, temp, humidity])
-                                    csv_file.flush()
-                                    with data_lock:
-                                        time_buffer.append(t_ms / 1000.0)
-                                        ax_buffer.append(ax)
-                                        ay_buffer.append(ay)
-                                        az_buffer.append(az)
-                                        occupancy_buffer.append(occupancy)
-                                        temp_buffer.append(temp)
-                                        humidity_buffer.append(humidity)
-                                parts = parts[7:]
-                            current_packet_str = ",".join(parts)
-                except socket.error as e:
-                    print(f"Socket communication error: {e}")
-                    break
-                except Exception as e:
-                    print(f"Error processing client data: {e}")
+            handle_client_connection(client_sock, csv_writer, csv_file)
                     
         except Exception as e:
             print(f"Error accepting connection: {e}")
@@ -259,6 +234,43 @@ def tcp_server_reader(host, port, csv_path):
                     except Exception:
                         pass
                     active_client_socket = None
+
+def tcp_client_reader(esp_ip, port, csv_path):
+    global active_client_socket
+    
+    write_header = not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0
+    csv_file = open(csv_path, 'a', newline='')
+    csv_writer = csv.writer(csv_file)
+    if write_header:
+        csv_writer.writerow(['time_ms', 'ax', 'ay', 'az', 'occupancy', 'temp', 'humidity'])
+        csv_file.flush()
+
+    while True:
+        try:
+            print(f"Connecting to ESP32 TCP Server at {esp_ip}:{port}...")
+            client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_sock.settimeout(5.0)
+            client_sock.connect((esp_ip, port))
+            client_sock.settimeout(None)
+            print("Connected to ESP32 TCP Server successfully.")
+            
+            with client_lock:
+                active_client_socket = client_sock
+                
+            handle_client_connection(client_sock, csv_writer, csv_file)
+            
+        except Exception as e:
+            print(f"Connection error or disconnected: {e}. Retrying in 3 seconds...")
+            time.sleep(3)
+        finally:
+            with client_lock:
+                if active_client_socket:
+                    try:
+                        active_client_socket.close()
+                    except Exception:
+                        pass
+                    active_client_socket = None
+
 
 def simulated_data_generator(csv_path):
     print("Simulated Data Generator running...")
@@ -335,11 +347,15 @@ def main():
     parser = argparse.ArgumentParser(description="Upgraded 3-Axis BCG Live Dashboard")
     parser.add_argument("--host", type=str, default=TCP_HOST, help="TCP server host interface")
     parser.add_argument("--port", type=int, default=TCP_PORT, help="TCP server port channel")
+    parser.add_argument("--connect", type=str, default=TCP_HOST, help="Connect to ESP32 at this IP address (TCP Client mode)")
     parser.add_argument("--log_file", type=str, default="live_bcg_output.csv", help="CSV path target backup logs")
     parser.add_argument("--window", type=float, default=10.0, help="Rolling window frame layout size viewport")
     args = parser.parse_args()
     
-    thread = threading.Thread(target=tcp_server_reader, args=(args.host, args.port, args.log_file), daemon=True)
+    if args.connect and args.connect.lower() not in ('', 'none'):
+        thread = threading.Thread(target=tcp_client_reader, args=(args.connect, args.port, args.log_file), daemon=True)
+    else:
+        thread = threading.Thread(target=tcp_server_reader, args=(args.host, args.port, args.log_file), daemon=True)
     thread.start()
     
     print("Initializing signal buffers and displaying dashboard...")
