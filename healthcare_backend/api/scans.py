@@ -103,25 +103,21 @@ def ingest_scan(data: ScanIngest, db: Session = Depends(get_db)):
         .first()
     )
     prev_score = prev_scan.ai_health_score if prev_scan else None
-    prev_conf = prev_scan.ai_confidence if prev_scan else None
 
     ai = compute_ai_score(
-        data.heart_rate, data.respiration_rate, data.sdnn, data.rmssd,
-        data.signal_quality, data.motion_detected, prev_score, prev_conf,
+        heart_rate=data.heart_rate, 
+        signal_quality=data.signal_quality, 
+        previous_score=prev_score,
     )
 
     scan = Scan(
         patient_id=patient_id,
         timestamp=data.timestamp or datetime.utcnow(),
         heart_rate=data.heart_rate,
-        respiration_rate=data.respiration_rate,
-        sdnn=data.sdnn,
-        rmssd=data.rmssd,
-        motion_detected=data.motion_detected,
+        lowest_heart_rate=data.lowest_heart_rate,
+        highest_heart_rate=data.highest_heart_rate,
         signal_quality=data.signal_quality,
         ai_health_score=ai["ai_health_score"],
-        ai_confidence=ai["ai_confidence"],
-        risk_level=ai["risk_level"],
     )
     db.add(scan)
     db.commit()
@@ -130,12 +126,9 @@ def ingest_scan(data: ScanIngest, db: Session = Depends(get_db)):
     # Generate alerts
     evaluate_and_create_alerts(db, patient_id, scan.id, {
         "heart_rate": scan.heart_rate,
-        "respiration_rate": scan.respiration_rate,
-        "sdnn": scan.sdnn,
         "signal_quality": scan.signal_quality,
-        "motion_detected": scan.motion_detected,
     })
 
-    session_manager.record_packet()
+    # Note: We will now leave session_manager.record_packet() to the /telemetry endpoint.
     logger.info(f"Scan ingested: patient={patient_id} HR={data.heart_rate} score={ai['ai_health_score']}")
     return scan

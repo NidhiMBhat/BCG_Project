@@ -43,14 +43,10 @@ async def live_stream():
                             "patient_id": scan.patient_id,
                             "timestamp": scan.timestamp.isoformat(),
                             "heart_rate": scan.heart_rate,
-                            "respiration_rate": scan.respiration_rate,
-                            "sdnn": scan.sdnn,
-                            "rmssd": scan.rmssd,
-                            "motion_detected": scan.motion_detected,
+                            "lowest_heart_rate": scan.lowest_heart_rate,
+                            "highest_heart_rate": scan.highest_heart_rate,
                             "signal_quality": scan.signal_quality,
                             "ai_health_score": scan.ai_health_score,
-                            "ai_confidence": scan.ai_confidence,
-                            "risk_level": scan.risk_level,
                         }
                 db.close()
 

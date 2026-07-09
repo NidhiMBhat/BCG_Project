@@ -1,0 +1,11 @@
+2026-07-10 00:30:53,168 | INFO | bcg.main | Starting BCG Healthcare Platform v1.0.0 on port 8001
+2026-07-10 00:30:53,179 | INFO | bcg.seeder | Database already seeded — skipping.
+2026-07-10 00:30:53,179 | INFO | bcg.main | Backend ready. Swagger: http://localhost:8001/docs
+2026-07-10 00:31:15,113 | WARNING | bcg.stream | MJPEG upstream unavailable: ConnectTimeout('')
+2026-07-10 00:31:54,950 | INFO | httpx | HTTP Request: GET http://127.0.0.1:8002/cam.mjpg "HTTP/1.0 200 OK"
+2026-07-10 00:33:46,950 | WARNING | bcg.stream | MJPEG upstream unavailable: ReadError('')
+2026-07-10 00:34:18,557 | INFO | httpx | HTTP Request: GET http://127.0.0.1:8002/cam.mjpg "HTTP/1.0 200 OK"
+2026-07-10 00:34:44,905 | WARNING | bcg.stream | MJPEG upstream unavailable: ReadError('')
+2026-07-10 00:36:44,021 | INFO | httpx | HTTP Request: GET http://127.0.0.1:8002/cam.mjpg "HTTP/1.0 200 OK"
+2026-07-10 00:37:46,027 | INFO | bcg.session | Monitoring session started: patient=1 by admin
+2026-07-10 00:40:04,868 | WARNING | bcg.stream | MJPEG upstream unavailable: ReadError('')

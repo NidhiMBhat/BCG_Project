@@ -114,31 +114,17 @@ def compute_analytics(db: Session, patient_id: int) -> dict:
             "averages": {},
             "trends": {},
             "daily_hr": [],
-            "daily_rr": [],
-            "daily_sdnn": [],
             "weekly_hr": None,
-            "weekly_rr": None,
-            "weekly_sdnn": None,
             "highest_hr": None,
             "lowest_hr": None,
             "hr_summary": "",
-            "rr_summary": "",
-            "hrv_summary": "",
         }
 
     hrs = [s.heart_rate for s in scans]
-    rrs = [s.respiration_rate for s in scans]
-    sdnns = [s.sdnn for s in scans]
-    rmssds = [s.rmssd for s in scans]
 
     hr_badge = _trend_badge(hrs, "hr")
-    rr_badge = _trend_badge(rrs, "rr")
-    hrv_badge = _trend_badge(sdnns, "hrv")
 
     avg_hr = _avg(hrs)
-    avg_rr = _avg(rrs)
-    avg_sdnn = _avg(sdnns)
-    avg_rmssd = _avg(rmssds)
 
     valid_hrs = [h for h in hrs if h is not None]
 
@@ -148,30 +134,17 @@ def compute_analytics(db: Session, patient_id: int) -> dict:
         "total_scan_count": len(all_scans),
         "averages": {
             "heart_rate": avg_hr,
-            "respiration_rate": avg_rr,
-            "sdnn": avg_sdnn,
-            "rmssd": avg_rmssd,
         },
         "highest_hr": round(max(valid_hrs), 1) if valid_hrs else None,
         "lowest_hr": round(min(valid_hrs), 1) if valid_hrs else None,
         "trends": {
             "hr": hr_badge,
-            "rr": rr_badge,
-            "hrv": hrv_badge,
         },
         "daily_hr": _daily_averages(scans, "heart_rate"),
-        "daily_rr": _daily_averages(scans, "respiration_rate"),
-        "daily_sdnn": _daily_averages(scans, "sdnn"),
         "weekly_hr": _weekly_average(scans, "heart_rate"),
-        "weekly_rr": _weekly_average(scans, "respiration_rate"),
-        "weekly_sdnn": _weekly_average(scans, "sdnn"),
         "hr_summary": _human_summary("hr", hr_badge, avg_hr),
-        "rr_summary": _human_summary("rr", rr_badge, avg_rr),
-        "hrv_summary": _human_summary("hrv", hrv_badge, avg_sdnn),
         "summary": (
             f"Analysed {len(scans)} scans over the past 7 days. "
             f"Average HR: {avg_hr} BPM. "
-            f"Average RR: {avg_rr} br/min. "
-            f"Average SDNN: {avg_sdnn} ms."
         ),
     }

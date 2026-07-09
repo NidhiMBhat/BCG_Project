@@ -69,7 +69,7 @@ import smtplib
 from email.message import EmailMessage
 def send_alert_email(subject, body):
     sender = "raoshashwati@gmail.com" 
-    password = "" # Use the generated App Password
+    password = "zpdtmutpbesyandq" # Use the generated App Password
     recipient = "raoshashwati@gmail.com" #recipient mail id
     msg = EmailMessage()
     msg.set_content(body)
@@ -99,12 +99,18 @@ def trigger_simulation_alert(mode_name, bpm_value, temp_value, hum_value, best_c
     send_alert_email(subject, body)
 
 
-def calculate_normal_confidence(bpm_value):
-    if bpm_value <= 0.0:
-        return 0.0
-    distance = abs(bpm_value - 71.0)
-    confidence = 100.0 - (distance ** 1.5) * 1.8
-    return float(np.clip(confidence, 30.0, 100.0))
+def compute_ai_score(hr, sqs_val):
+    if 60 <= hr <= 90: hr_score = 96.0
+    elif 55 <= hr < 60 or 90 < hr <= 100: hr_score = 88.0
+    elif 50 <= hr < 55 or 100 < hr <= 110: hr_score = 75.0
+    else: hr_score = 60.0
+    
+    if sqs_val >= 8.0: sq_mod = 1.0
+    elif sqs_val >= 4.0: sq_mod = 0.98
+    elif sqs_val >= 2.0: sq_mod = 0.90
+    else: sq_mod = 0.70
+    
+    return max(0.0, min(100.0, hr_score * sq_mod))
 
 # ==============================================================================
 # TCP SERVER CONFIGURATION
@@ -456,7 +462,7 @@ def main():
         (ax_card_sqs, "Signal Quality (SQS)", "#9b59b6"),
         (ax_card_bpm, "Heart Rate (BPM)", "#e74c3c"),
         (ax_card_pred, "AI Rhythm Prediction", "#f1c40f"),
-        (ax_card_conf, "AI Confidence", "#e67e22")
+        (ax_card_conf, "AI Health Score", "#e67e22")
     ]:
         ax.set_facecolor('#161a22')
         ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
@@ -718,15 +724,15 @@ def main():
         # Simulated mode overrides prediction and confidence
         if current_sim_mode == 'B':
             current_prediction[0] = "Bradycardia"
-            current_confidence[0] = 100.0
+            current_confidence[0] = compute_ai_score(42.0, quality_metrics[best_channel]['sqs'])
             bpm_display = 42.0
         elif current_sim_mode == 'T':
             current_prediction[0] = "Tachycardia"
-            current_confidence[0] = 100.0
+            current_confidence[0] = compute_ai_score(145.0, quality_metrics[best_channel]['sqs'])
             bpm_display = 145.0
         elif current_occ == 1:
             current_prediction[0] = "Normal"
-            current_confidence[0] = calculate_normal_confidence(clamped_bpm)
+            current_confidence[0] = compute_ai_score(clamped_bpm, quality_metrics[best_channel]['sqs'])
             bpm_display = clamped_bpm
         else:
             current_prediction[0] = "No Person Detected"
@@ -843,7 +849,7 @@ def main():
             conf_text.set_text("WAITING DATA")
             conf_text.set_color('#7f8c8d')
         else:
-            conf_text.set_text(f"{current_confidence[0]:.1f}%")
+            conf_text.set_text(f"{current_confidence[0]:.1f}")
             conf_text.set_color('#e67e22')
 
         # Environment Comfort Classifications
@@ -963,10 +969,12 @@ def main():
         global latest_jpeg
         try:
             fig.canvas.draw()
-            rgba_buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
-            w, h = fig.canvas.get_width_height()
-            pixel_ratio = int((rgba_buf.size / (w * h * 4)) ** 0.5)
-            rgba = rgba_buf.reshape((h * pixel_ratio, w * pixel_ratio, 4))
+            canvas = fig.canvas
+            try:
+                w, h = canvas.get_width_height(physical=True)
+            except TypeError:
+                w, h = canvas.get_width_height()
+            rgba = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8).reshape((h, w, 4))
             img = Image.fromarray(rgba, 'RGBA').convert('RGB')
             buf = io.BytesIO()
             img.save(buf, format='JPEG', quality=65)

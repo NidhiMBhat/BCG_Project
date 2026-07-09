@@ -74,6 +74,7 @@ export const api = {
     start: (patientId) => request('POST', `/session/start?patient_id=${patientId}`),
     stop: () => request('POST', '/session/stop'),
     status: () => request('GET', '/session/status'),
+    listForPatient: (patientId) => request('GET', `/session/patients/${patientId}/sessions`),
   },
 
   // ── Analytics ───────────────────────────────────────────────────────────

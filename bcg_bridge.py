@@ -162,11 +162,7 @@ def compute_scan_metrics(t_arr, ax_arr, ay_arr, az_arr, occ_arr):
 
         return {
             "heart_rate": round(heart_rate, 1),
-            "respiration_rate": round(respiration_rate, 1),
-            "sdnn": round(max(0, sdnn), 2),
-            "rmssd": round(max(0, rmssd), 2),
             "signal_quality": signal_quality,
-            "motion_detected": motion_detected,
         }
     except Exception as e:
         logger.error(f"Signal processing error: {e}")
@@ -236,7 +232,7 @@ class CSVTailer:
 def check_session(backend_url: str) -> int | None:
     """Check if there's an active monitoring session; return patient_id or None."""
     try:
-        r = requests.get(f"{backend_url}/session/status", timeout=2)
+        r = requests.get(f"{backend_url}/live/status", timeout=2)
         if r.status_code == 200:
             data = r.json()
             if data.get("active"):
@@ -246,11 +242,22 @@ def check_session(backend_url: str) -> int | None:
     return None
 
 
-def post_scan(backend_url: str, patient_id: int, metrics: dict) -> bool:
+def post_telemetry(backend_url: str, packets: int, current_hr: float = None):
+    """POST lightweight telemetry to the backend."""
+    try:
+        payload = {"packets_received": packets, "current_heart_rate": current_hr}
+        requests.post(f"{backend_url}/session/telemetry", json=payload, timeout=2)
+    except Exception:
+        pass
+
+
+def post_scan(backend_url: str, patient_id: int, metrics: dict, lowest_hr: float, highest_hr: float) -> bool:
     """POST a scan to the backend ingest endpoint (no auth required)."""
     payload = {
         "patient_id": patient_id,
         "timestamp": datetime.utcnow().isoformat(),
+        "lowest_heart_rate": lowest_hr,
+        "highest_heart_rate": highest_hr,
         **metrics,
     }
     try:
@@ -295,11 +302,18 @@ def main():
     window_start_time = time.time()
     packets_received = 0
     backend_ok = False
+    
+    # Session tracking variables
+    current_patient_id = None
+    lowest_hr = None
+    highest_hr = None
+    sq_history = deque(maxlen=3)
 
     while True:
         try:
             # 1. Read new CSV rows
             new_rows = tailer.read_new_rows()
+            new_packets = 0
             for (t_ms, ax, ay, az, occ) in new_rows:
                 t_buf.append(t_ms / 1000.0)
                 ax_buf.append(ax)
@@ -307,18 +321,67 @@ def main():
                 az_buf.append(az)
                 occ_buf.append(occ)
                 packets_received += 1
+                new_packets += 1
 
-            # 2. Check if we've accumulated a full scan window
-            elapsed = time.time() - window_start_time
-            if elapsed >= SCAN_WINDOW_SECONDS and len(t_buf) >= MIN_SAMPLES_FOR_SCAN:
-                # 3. Check for active session
-                patient_id = check_session(args.backend)
-                if patient_id:
+            # 3. Check for active session
+            patient_id = check_session(args.backend)
+            if patient_id != current_patient_id:
+                # If session stopped, flush the remaining buffer to a final scan
+                if current_patient_id is not None and len(t_buf) >= MIN_SAMPLES_FOR_SCAN:
+                    logger.info("Session stopped. Flushing remaining buffer to a final scan.")
                     metrics = compute_scan_metrics(
                         list(t_buf), list(ax_buf), list(ay_buf), list(az_buf), list(occ_buf)
                     )
                     if metrics:
-                        post_scan(args.backend, patient_id, metrics)
+                        # Fallback quality if history exists
+                        if len(sq_history) > 0:
+                            metrics["signal_quality"] = sq_history[0]
+                        post_scan(args.backend, current_patient_id, metrics, lowest_hr, highest_hr)
+
+                # Session changed or reset
+                current_patient_id = patient_id
+                lowest_hr = None
+                highest_hr = None
+                sq_history.clear()
+                t_buf.clear()
+                ax_buf.clear()
+                ay_buf.clear()
+                az_buf.clear()
+                occ_buf.clear()
+                window_start_time = time.time()
+            
+            # Post telemetry if we read new rows
+            if new_packets > 0 and current_patient_id:
+                # estimate current HR if we have enough data (rough fast calc)
+                temp_hr = None
+                if len(t_buf) >= MIN_SAMPLES_FOR_SCAN:
+                    m = compute_scan_metrics(list(t_buf), list(ax_buf), list(ay_buf), list(az_buf), list(occ_buf))
+                    if m:
+                        temp_hr = m.get("heart_rate")
+                        if temp_hr:
+                            if lowest_hr is None or temp_hr < lowest_hr: lowest_hr = temp_hr
+                            if highest_hr is None or temp_hr > highest_hr: highest_hr = temp_hr
+                post_telemetry(args.backend, new_packets, temp_hr)
+
+            # 2. Check if we've accumulated a full scan window
+            elapsed = time.time() - window_start_time
+            if elapsed >= SCAN_WINDOW_SECONDS and len(t_buf) >= MIN_SAMPLES_FOR_SCAN:
+                if current_patient_id:
+                    metrics = compute_scan_metrics(
+                        list(t_buf), list(ax_buf), list(ay_buf), list(az_buf), list(occ_buf)
+                    )
+                    if metrics:
+                        # Apply Hysteresis to Signal Quality
+                        sq_history.append(metrics["signal_quality"])
+                        # Only change quality if it has been consistently different
+                        if len(sq_history) == sq_history.maxlen and len(set(sq_history)) == 1:
+                            # stable
+                            pass
+                        else:
+                            # fallback to previous or most common
+                            metrics["signal_quality"] = sq_history[0] if len(sq_history) > 0 else "Good"
+
+                        post_scan(args.backend, current_patient_id, metrics, lowest_hr, highest_hr)
                     else:
                         logger.warning("Insufficient signal quality for scan — skipping window.")
                 else:

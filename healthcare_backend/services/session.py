@@ -16,6 +16,9 @@ class SessionManager:
         self._packet_count: int = 0
         self._last_packet_time: Optional[float] = None
         self._packets_in_window: list = []  # timestamps for PPS calculation
+        
+        self.lowest_heart_rate: Optional[float] = None
+        self.highest_heart_rate: Optional[float] = None
 
     # -----------------------------------------------------------------------
     # Public API
@@ -28,26 +31,55 @@ class SessionManager:
             self._packet_count = 0
             self._packets_in_window = []
             self._last_packet_time = None
+            self.lowest_heart_rate = None
+            self.highest_heart_rate = None
 
-    def stop_session(self):
+    def stop_session(self) -> Optional[dict]:
         with self._lock:
+            if not self._active_patient_id:
+                return None
+            
+            # Capture data to return before clearing
+            summary = {
+                "patient_id": self._active_patient_id,
+                "start_time": self._session_start,
+                "packet_count": self._packet_count,
+                "lowest_heart_rate": self.lowest_heart_rate,
+                "highest_heart_rate": self.highest_heart_rate
+            }
+
             self._active_patient_id = None
             self._session_start = None
             self._packet_count = 0
             self._packets_in_window = []
+            self.lowest_heart_rate = None
+            self.highest_heart_rate = None
+            
+            return summary
 
-    def record_packet(self):
-        """Call this each time a raw BCG sample arrives."""
+    def record_telemetry(self, packets_received: int, current_hr: Optional[float]):
+        """Call this periodically from the bridge."""
         with self._lock:
             if self._active_patient_id is None:
                 return
             now = time.time()
-            self._packet_count += 1
+            
+            # Record packets for PPS
+            self._packet_count += packets_received
             self._last_packet_time = now
-            self._packets_in_window.append(now)
-            # Keep only last 5 seconds of timestamps
+            for _ in range(packets_received):
+                self._packets_in_window.append(now)
+            
+            # Keep only last 5 seconds of timestamps for PPS
             cutoff = now - 5.0
             self._packets_in_window = [t for t in self._packets_in_window if t >= cutoff]
+            
+            # Update HR bounds
+            if current_hr is not None and current_hr > 0:
+                if self.lowest_heart_rate is None or current_hr < self.lowest_heart_rate:
+                    self.lowest_heart_rate = current_hr
+                if self.highest_heart_rate is None or current_hr > self.highest_heart_rate:
+                    self.highest_heart_rate = current_hr
 
     @property
     def is_active(self) -> bool:
@@ -71,8 +103,11 @@ class SessionManager:
                 "elapsed_seconds": round(elapsed, 1),
                 "packet_count": self._packet_count,
                 "packets_per_second": round(pps, 2),
+                "lowest_heart_rate": self.lowest_heart_rate,
+                "highest_heart_rate": self.highest_heart_rate,
             }
 
 
 # Singleton instance used across the app
 session_manager = SessionManager()
+

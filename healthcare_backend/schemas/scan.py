@@ -9,10 +9,8 @@ class ScanIngest(BaseModel):
     patient_id: int
     timestamp: Optional[datetime] = None
     heart_rate: Optional[float] = None
-    respiration_rate: Optional[float] = None
-    sdnn: Optional[float] = None
-    rmssd: Optional[float] = None
-    motion_detected: bool = False
+    lowest_heart_rate: Optional[float] = None
+    highest_heart_rate: Optional[float] = None
     signal_quality: str = "Good"
 
 
@@ -20,14 +18,10 @@ class ScanCreate(BaseModel):
     patient_id: int
     timestamp: Optional[datetime] = None
     heart_rate: Optional[float] = None
-    respiration_rate: Optional[float] = None
-    sdnn: Optional[float] = None
-    rmssd: Optional[float] = None
-    motion_detected: bool = False
+    lowest_heart_rate: Optional[float] = None
+    highest_heart_rate: Optional[float] = None
     signal_quality: str = "Good"
     ai_health_score: Optional[float] = None
-    ai_confidence: Optional[float] = None
-    risk_level: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -40,14 +34,10 @@ class ScanOut(BaseModel):
     patient_id: int
     timestamp: datetime
     heart_rate: Optional[float]
-    respiration_rate: Optional[float]
-    sdnn: Optional[float]
-    rmssd: Optional[float]
-    motion_detected: bool
+    lowest_heart_rate: Optional[float]
+    highest_heart_rate: Optional[float]
     signal_quality: Optional[str]
     ai_health_score: Optional[float]
-    ai_confidence: Optional[float]
-    risk_level: Optional[str]
     notes: Optional[str]
 
     model_config = {"from_attributes": True}

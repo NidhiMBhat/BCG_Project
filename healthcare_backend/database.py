@@ -28,5 +28,5 @@ def get_db():
 def init_db():
     """Create all tables if they don't exist."""
     # Import models so they register with Base metadata
-    from healthcare_backend.models import user, patient, scan, alert  # noqa
+    from healthcare_backend.models import user, patient, scan, alert, monitoring_session  # noqa
     Base.metadata.create_all(bind=engine)

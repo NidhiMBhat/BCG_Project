@@ -131,11 +131,10 @@ export default function LiveMonitorPage() {
             </div>
 
             {/* Live vitals */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               <StatCard label="Heart Rate" value={scan?.heart_rate?.toFixed(1) ?? '—'} unit="BPM" icon={Heart} color="text-rose-500" pulse={!!scan} />
-              <StatCard label="Respiration" value={scan?.respiration_rate?.toFixed(1) ?? '—'} unit="br/min" icon={Wind} color="text-cyan-500" />
-              <StatCard label="SDNN" value={scan?.sdnn?.toFixed(1) ?? '—'} unit="ms" icon={Activity} color="text-violet-500" />
-              <StatCard label="RMSSD" value={scan?.rmssd?.toFixed(1) ?? '—'} unit="ms" icon={Zap} color="text-amber-500" />
+              <StatCard label="Lowest HR (session)" value={session?.lowest_heart_rate?.toFixed(1) ?? '—'} unit="BPM" icon={Activity} color="text-cyan-500" />
+              <StatCard label="Highest HR (session)" value={session?.highest_heart_rate?.toFixed(1) ?? '—'} unit="BPM" icon={Zap} color="text-amber-500" />
             </div>
 
             {/* AI & Signal */}
@@ -149,10 +148,6 @@ export default function LiveMonitorPage() {
                       {scan.ai_health_score?.toFixed(0) ?? '—'}
                     </p>
                     <p className="text-brand-700/80 text-sm mt-1">AI Health Score</p>
-                    <p className="text-xs text-brand-700/60 mt-0.5">Confidence: {scan.ai_confidence?.toFixed(1)}%</p>
-                  </div>
-                  <div className="flex justify-center">
-                    <span className={`badge text-sm ${riskColor(scan.risk_level)}`}>{scan.risk_level || '—'} Risk</span>
                   </div>
                   <p className="text-xs text-brand-700/60 text-center">⚠️ Heuristic demo — not a medical diagnosis</p>
                 </div>
@@ -163,9 +158,7 @@ export default function LiveMonitorPage() {
                   <div className="space-y-2">
                     {[
                       ['Signal Quality', <span className={signalQualityColor(scan.signal_quality)}>{scan.signal_quality || '—'}</span>],
-                      ['Motion Detected', <span className={scan.motion_detected ? 'text-amber-500' : 'text-emerald-500'}>{scan.motion_detected ? 'Yes ⚠️' : 'No ✓'}</span>],
                       ['Timestamp', <span className="text-brand-800 text-xs font-mono">{formatDateTime(scan.timestamp)}</span>],
-                      ['Risk Level', <span className={`badge ${riskColor(scan.risk_level)}`}>{scan.risk_level}</span>],
                     ].map(([k, v]) => (
                       <div key={k} className="flex items-center justify-between py-2 border-b border-brand-900/10 last:border-0">
                         <span className="text-sm text-brand-700/80">{k}</span>

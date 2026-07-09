@@ -1,0 +1,79 @@
+2026-07-10 01:23:59,814 | BRIDGE | INFO | ============================================================
+2026-07-10 01:23:59,814 | BRIDGE | INFO | BCG Bridge starting
+2026-07-10 01:23:59,815 | BRIDGE | INFO |   CSV source : live_bcg_output.csv
+2026-07-10 01:23:59,815 | BRIDGE | INFO |   Backend    : http://localhost:8001
+2026-07-10 01:23:59,815 | BRIDGE | INFO | ============================================================
+2026-07-10 01:23:59,815 | BRIDGE | INFO | Bridge is fully decoupled from bcg_live.py — safe to run alongside it.
+2026-07-10 01:23:59,836 | BRIDGE | INFO | Tailing CSV: live_bcg_output.csv (starting at byte 7625776)
+2026-07-10 01:28:30,274 | BRIDGE | INFO | ============================================================
+2026-07-10 01:28:30,274 | BRIDGE | INFO | BCG Bridge starting
+2026-07-10 01:28:30,274 | BRIDGE | INFO |   CSV source : live_bcg_output.csv
+2026-07-10 01:28:30,274 | BRIDGE | INFO |   Backend    : http://localhost:8001
+2026-07-10 01:28:30,274 | BRIDGE | INFO | ============================================================
+2026-07-10 01:28:30,274 | BRIDGE | INFO | Bridge is fully decoupled from bcg_live.py — safe to run alongside it.
+2026-07-10 01:28:30,296 | BRIDGE | INFO | Tailing CSV: live_bcg_output.csv (starting at byte 7857414)
+2026-07-10 01:29:28,805 | BRIDGE | INFO | Scan saved: id=71 patient=1 HR=120.0 score=84.1
+2026-07-10 01:29:44,504 | BRIDGE | INFO | Scan saved: id=72 patient=1 HR=120.0 score=79.3
+2026-07-10 01:30:00,194 | BRIDGE | INFO | Scan saved: id=73 patient=1 HR=70.5 score=82.6
+2026-07-10 01:30:15,898 | BRIDGE | INFO | Scan saved: id=74 patient=1 HR=120.0 score=78.1
+2026-07-10 01:36:17,646 | BRIDGE | INFO | Scan saved: id=75 patient=2 HR=104.2 score=89.2
+2026-07-10 01:36:33,301 | BRIDGE | INFO | Scan saved: id=76 patient=2 HR=63.3 score=90.6
+2026-07-10 01:36:48,983 | BRIDGE | INFO | Scan saved: id=77 patient=2 HR=120.0 score=84.5
+2026-07-10 01:40:34,248 | BRIDGE | INFO | Scan saved: id=78 patient=1 HR=82.6 score=81.7
+2026-07-10 01:43:08,288 | BRIDGE | INFO | Scan saved: id=79 patient=1 HR=107.1 score=80.4
+2026-07-10 01:43:23,928 | BRIDGE | INFO | Scan saved: id=80 patient=1 HR=120.0 score=76.3
+2026-07-10 01:43:39,662 | BRIDGE | INFO | Scan saved: id=81 patient=1 HR=120.0 score=73.0
+2026-07-10 01:46:13,468 | BRIDGE | INFO | Scan saved: id=82 patient=1 HR=118.3 score=70.4
+2026-07-10 01:49:59,234 | BRIDGE | INFO | ============================================================
+2026-07-10 01:49:59,234 | BRIDGE | INFO | BCG Bridge starting
+2026-07-10 01:49:59,234 | BRIDGE | INFO |   CSV source : live_bcg_output.csv
+2026-07-10 01:49:59,234 | BRIDGE | INFO |   Backend    : http://localhost:8001
+2026-07-10 01:49:59,234 | BRIDGE | INFO | ============================================================
+2026-07-10 01:49:59,234 | BRIDGE | INFO | Bridge is fully decoupled from bcg_live.py — safe to run alongside it.
+2026-07-10 01:49:59,259 | BRIDGE | INFO | Tailing CSV: live_bcg_output.csv (starting at byte 10494736)
+2026-07-10 01:50:59,751 | BRIDGE | INFO | Scan saved: id=83 patient=1 HR=61.7 score=75.5
+2026-07-10 01:51:00,439 | BRIDGE | INFO | Scan saved: id=84 patient=1 HR=119.6 score=72.4
+2026-07-10 01:51:02,286 | BRIDGE | INFO | Session stopped. Flushing remaining buffer to a final scan.
+2026-07-10 01:51:04,351 | BRIDGE | INFO | Scan saved: id=85 patient=1 HR=120.0 score=69.9
+2026-07-10 01:51:36,763 | BRIDGE | INFO | Scan saved: id=86 patient=1 HR=82.2 score=75.1
+2026-07-10 01:51:40,170 | BRIDGE | INFO | Scan saved: id=87 patient=1 HR=120.0 score=72.1
+2026-07-10 01:51:52,477 | BRIDGE | INFO | Scan saved: id=88 patient=1 HR=113.9 score=69.7
+2026-07-10 01:51:55,868 | BRIDGE | INFO | Scan saved: id=89 patient=1 HR=120.0 score=67.8
+2026-07-10 01:52:08,144 | BRIDGE | INFO | Scan saved: id=90 patient=1 HR=101.2 score=69.2
+2026-07-10 01:52:11,528 | BRIDGE | INFO | Scan saved: id=91 patient=1 HR=120.0 score=67.4
+2026-07-10 01:52:11,528 | BRIDGE | INFO | Packets tailed so far: 7000, buffer: 0 samples
+2026-07-10 01:52:23,821 | BRIDGE | INFO | Scan saved: id=92 patient=1 HR=81.5 score=73.1
+2026-07-10 01:52:27,222 | BRIDGE | INFO | Scan saved: id=93 patient=1 HR=86.2 score=77.7
+2026-07-10 01:52:39,459 | BRIDGE | INFO | Scan saved: id=94 patient=1 HR=77.2 score=81.4
+2026-07-10 01:52:42,871 | BRIDGE | INFO | Scan saved: id=95 patient=1 HR=120.0 score=77.1
+2026-07-10 01:52:55,106 | BRIDGE | INFO | Scan saved: id=96 patient=1 HR=120.0 score=73.7
+2026-07-10 01:52:58,544 | BRIDGE | INFO | Scan saved: id=97 patient=1 HR=120.0 score=71.0
+2026-07-10 01:53:10,792 | BRIDGE | INFO | Scan saved: id=98 patient=1 HR=113.8 score=68.8
+2026-07-10 01:53:14,213 | BRIDGE | INFO | Scan saved: id=99 patient=1 HR=111.1 score=67.0
+2026-07-10 01:53:25,818 | BRIDGE | INFO | Session stopped. Flushing remaining buffer to a final scan.
+2026-07-10 01:53:26,429 | BRIDGE | INFO | Scan saved: id=100 patient=1 HR=103.8 score=68.6
+2026-07-10 01:53:27,919 | BRIDGE | INFO | Scan saved: id=101 patient=1 HR=94.7 score=72.5
+2026-07-10 01:56:16,579 | BRIDGE | INFO | Bridge stopped by user.
+2026-07-10 01:56:20,332 | BRIDGE | INFO | ============================================================
+2026-07-10 01:56:20,332 | BRIDGE | INFO | BCG Bridge starting
+2026-07-10 01:56:20,332 | BRIDGE | INFO |   CSV source : live_bcg_output.csv
+2026-07-10 01:56:20,333 | BRIDGE | INFO |   Backend    : http://localhost:8001
+2026-07-10 01:56:20,333 | BRIDGE | INFO | ============================================================
+2026-07-10 01:56:20,333 | BRIDGE | INFO | Bridge is fully decoupled from bcg_live.py — safe to run alongside it.
+2026-07-10 01:56:20,350 | BRIDGE | INFO | Tailing CSV: live_bcg_output.csv (starting at byte 11273174)
+2026-07-10 01:57:27,275 | BRIDGE | INFO | ============================================================
+2026-07-10 01:57:27,276 | BRIDGE | INFO | BCG Bridge starting
+2026-07-10 01:57:27,276 | BRIDGE | INFO |   CSV source : live_bcg_output.csv
+2026-07-10 01:57:27,276 | BRIDGE | INFO |   Backend    : http://localhost:8001
+2026-07-10 01:57:27,276 | BRIDGE | INFO | ============================================================
+2026-07-10 01:57:27,276 | BRIDGE | INFO | Bridge is fully decoupled from bcg_live.py — safe to run alongside it.
+2026-07-10 01:57:27,277 | BRIDGE | INFO | Tailing CSV: live_bcg_output.csv (starting at byte 11273174)
+2026-07-10 02:00:01,514 | BRIDGE | INFO | Bridge stopped by user.
+2026-07-10 02:00:04,073 | BRIDGE | INFO | ============================================================
+2026-07-10 02:00:04,073 | BRIDGE | INFO | BCG Bridge starting
+2026-07-10 02:00:04,073 | BRIDGE | INFO |   CSV source : live_bcg_output.csv
+2026-07-10 02:00:04,074 | BRIDGE | INFO |   Backend    : http://localhost:8001
+2026-07-10 02:00:04,074 | BRIDGE | INFO | ============================================================
+2026-07-10 02:00:04,074 | BRIDGE | INFO | Bridge is fully decoupled from bcg_live.py — safe to run alongside it.
+2026-07-10 02:00:04,088 | BRIDGE | INFO | Tailing CSV: live_bcg_output.csv (starting at byte 11606971)
+2026-07-10 02:07:56,859 | BRIDGE | INFO | Bridge stopped by user.

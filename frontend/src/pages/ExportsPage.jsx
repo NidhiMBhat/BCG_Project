@@ -77,7 +77,7 @@ export default function ExportsPage() {
         <div className="space-y-2 text-sm text-brand-700/80">
           <div className="flex items-start gap-2">
             <FileText className="w-4 h-4 text-brand-400 flex-shrink-0 mt-0.5" />
-            <p>Headers: scan_id, patient_id, patient_code, patient_name, timestamp, heart_rate_bpm, respiration_rate_brpm, sdnn_ms, rmssd_ms, motion_detected, signal_quality, ai_health_score, ai_confidence, risk_level, notes</p>
+            <p>Headers: scan_id, patient_id, patient_code, patient_name, timestamp, heart_rate_bpm, lowest_heart_rate_bpm, highest_heart_rate_bpm, signal_quality, ai_health_score, notes</p>
           </div>
           <p className="text-xs text-brand-700/60">Compatible with MATLAB <code>readtable()</code>, Python pandas, and Excel.</p>
         </div>

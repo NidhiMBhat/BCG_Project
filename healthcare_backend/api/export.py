@@ -42,20 +42,17 @@ def export_csv(
     # Header
     writer.writerow([
         "scan_id", "patient_id", "patient_code", "patient_name",
-        "timestamp", "heart_rate_bpm", "respiration_rate_brpm",
-        "sdnn_ms", "rmssd_ms", "motion_detected", "signal_quality",
-        "ai_health_score", "ai_confidence", "risk_level", "notes",
+        "timestamp", "heart_rate_bpm", "lowest_heart_rate_bpm", "highest_heart_rate_bpm",
+        "signal_quality", "ai_health_score", "notes",
     ])
 
     for s in scans:
         writer.writerow([
             s.id, patient_id, patient.patient_code, patient.name,
             s.timestamp.isoformat(),
-            s.heart_rate, s.respiration_rate,
-            s.sdnn, s.rmssd,
-            int(s.motion_detected) if s.motion_detected is not None else 0,
+            s.heart_rate, s.lowest_heart_rate, s.highest_heart_rate,
             s.signal_quality,
-            s.ai_health_score, s.ai_confidence, s.risk_level,
+            s.ai_health_score,
             (s.notes or "").replace("\n", " "),
         ])
 

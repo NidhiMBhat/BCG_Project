@@ -3,7 +3,7 @@ import { Search, SortAsc, SortDesc, ChevronLeft, ChevronRight } from 'lucide-rea
 import { usePatients } from '../hooks/usePatients'
 import { useScans } from '../hooks/useScans'
 import ScanModal from '../components/ScanModal'
-import { formatDateTime, formatHR, formatRR, formatHRV, signalQualityColor, riskColor } from '../utils/formatters'
+import { formatDateTime, formatHR, signalQualityColor } from '../utils/formatters'
 
 const PAGE_SIZE = 15
 
@@ -74,7 +74,7 @@ export default function HistoryPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-brand-900/10 text-xs text-brand-700/60 uppercase tracking-wider">
-                  {['Timestamp', 'HR', 'RR', 'SDNN', 'RMSSD', 'Signal', 'Motion', 'AI Score', 'Risk', 'Notes'].map(h => (
+                  {['Timestamp', 'HR', 'Signal', 'AI Score', 'Notes'].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
                   ))}
                 </tr>
@@ -88,13 +88,8 @@ export default function HistoryPage() {
                   >
                     <td className="px-4 py-3 text-brand-700/80 font-mono text-xs whitespace-nowrap">{formatDateTime(s.timestamp)}</td>
                     <td className="px-4 py-3 text-rose-400 font-mono font-semibold">{formatHR(s.heart_rate)}</td>
-                    <td className="px-4 py-3 text-cyan-400 font-mono">{formatRR(s.respiration_rate)}</td>
-                    <td className="px-4 py-3 text-violet-400 font-mono">{formatHRV(s.sdnn)}</td>
-                    <td className="px-4 py-3 text-amber-400 font-mono">{formatHRV(s.rmssd)}</td>
                     <td className={`px-4 py-3 font-medium ${signalQualityColor(s.signal_quality)}`}>{s.signal_quality || '—'}</td>
-                    <td className={`px-4 py-3 ${s.motion_detected ? 'text-amber-400' : 'text-emerald-400'}`}>{s.motion_detected ? 'Yes' : 'No'}</td>
                     <td className="px-4 py-3 font-mono font-bold text-brand-400">{s.ai_health_score?.toFixed(1) ?? '—'}</td>
-                    <td className="px-4 py-3"><span className={`badge ${riskColor(s.risk_level)}`}>{s.risk_level || '—'}</span></td>
                     <td className="px-4 py-3 text-brand-700/60 max-w-xs truncate">{s.notes || '—'}</td>
                   </tr>
                 ))}

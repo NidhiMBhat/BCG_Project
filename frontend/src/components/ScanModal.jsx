@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { X, Save, Clock, Heart, Wind, Activity, Zap } from 'lucide-react'
-import { formatDateTime, formatHR, formatRR, formatHRV, formatPct, signalQualityColor, riskColor, scoreColor } from '../utils/formatters'
+import { formatDateTime, formatHR, signalQualityColor, scoreColor } from '../utils/formatters'
 import api from '../utils/api'
 
 export default function ScanModal({ scan, onClose, onSaved }) {
@@ -48,9 +48,8 @@ export default function ScanModal({ scan, onClose, onSaved }) {
             <p className="section-title">Physiological Metrics</p>
             <div className="grid grid-cols-2 gap-3">
               <MetricRow icon={Heart} label="Heart Rate" value={formatHR(scan.heart_rate)} color="text-rose-400" />
-              <MetricRow icon={Wind} label="Respiration" value={formatRR(scan.respiration_rate)} color="text-cyan-400" />
-              <MetricRow icon={Activity} label="SDNN" value={formatHRV(scan.sdnn)} color="text-violet-400" />
-              <MetricRow icon={Zap} label="RMSSD" value={formatHRV(scan.rmssd)} color="text-amber-400" />
+              <MetricRow icon={Heart} label="Lowest HR" value={formatHR(scan.lowest_heart_rate)} color="text-cyan-400" />
+              <MetricRow icon={Heart} label="Highest HR" value={formatHR(scan.highest_heart_rate)} color="text-amber-400" />
             </div>
           </div>
 
@@ -63,24 +62,10 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                 <span className={`font-semibold text-sm ${signalQualityColor(scan.signal_quality)}`}>{scan.signal_quality || '—'}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-brand-700/80">Motion Detected</span>
-                <span className={`font-semibold text-sm ${scan.motion_detected ? 'text-amber-400' : 'text-emerald-400'}`}>
-                  {scan.motion_detected ? 'Yes' : 'No'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
                 <span className="text-sm text-brand-700/80">AI Health Score</span>
                 <span className={`font-bold text-lg font-mono ${scoreColor(scan.ai_health_score)}`}>
                   {scan.ai_health_score?.toFixed(1) ?? '—'}
                 </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-brand-700/80">AI Confidence</span>
-                <span className="font-semibold text-sm text-brand-900">{formatPct(scan.ai_confidence)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-brand-700/80">Risk Level</span>
-                <span className={`badge ${riskColor(scan.risk_level)}`}>{scan.risk_level || '—'}</span>
               </div>
             </div>
             <p className="text-xs text-brand-700/60 mt-2">

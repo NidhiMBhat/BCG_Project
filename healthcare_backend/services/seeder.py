@@ -39,42 +39,26 @@ def _rng_seed(patient_idx: int) -> random.Random:
     return random.Random(42 + patient_idx * 17)
 
 
-def _gen_scan(rng: random.Random, patient_id: int, ts: datetime, prev_score=None, prev_conf=None) -> Scan:
+def _gen_scan(rng: random.Random, patient_id: int, ts: datetime, prev_score=None) -> Scan:
     """Generate one realistic scan for a patient."""
     # Determine scenario type: resting vs mild activity
     scenario = rng.choices(["resting", "mild", "post_exercise"], weights=[0.55, 0.30, 0.15])[0]
 
     if scenario == "resting":
         hr = rng.uniform(58, 72)
-        rmssd = rng.uniform(38, 60)
-        sdnn = rng.uniform(48, 75)
-        rr = rng.uniform(13, 16)
     elif scenario == "mild":
         hr = rng.uniform(70, 88)
-        rmssd = rng.uniform(25, 45)
-        sdnn = rng.uniform(35, 60)
-        rr = rng.uniform(15, 19)
     else:  # post_exercise
         hr = rng.uniform(84, 96)
-        rmssd = rng.uniform(20, 35)
-        sdnn = rng.uniform(30, 50)
-        rr = rng.uniform(17, 20)
 
     # Add slight physiological noise
     hr += rng.gauss(0, 1.5)
-    rr += rng.gauss(0, 0.5)
-    sdnn += rng.gauss(0, 2.0)
-    rmssd += rng.gauss(0, 2.0)
 
     hr = max(55, min(100, hr))
-    rr = max(11, min(21, rr))
-    sdnn = max(28, min(78, sdnn))
-    rmssd = max(18, min(65, rmssd))
 
     signal_quality = rng.choice(SIGNAL_QUALITIES)
-    motion = rng.random() < 0.15
 
-    ai = compute_ai_score(hr, rr, sdnn, rmssd, signal_quality, motion, prev_score, prev_conf)
+    ai = compute_ai_score(hr, signal_quality, prev_score)
 
     notes_pool = [
         None, None, None,
@@ -94,14 +78,8 @@ def _gen_scan(rng: random.Random, patient_id: int, ts: datetime, prev_score=None
         patient_id=patient_id,
         timestamp=ts,
         heart_rate=round(hr, 1),
-        respiration_rate=round(rr, 1),
-        sdnn=round(sdnn, 2),
-        rmssd=round(rmssd, 2),
-        motion_detected=motion,
         signal_quality=signal_quality,
         ai_health_score=ai["ai_health_score"],
-        ai_confidence=ai["ai_confidence"],
-        risk_level=ai["risk_level"],
         notes=notes,
     )
 
@@ -139,13 +117,11 @@ def seed_database(db: Session):
         timestamps = _spread_timestamps(rng, n_scans)
 
         prev_score = None
-        prev_conf = None
         for ts in timestamps:
-            scan = _gen_scan(rng, patient.id, ts, prev_score, prev_conf)
+            scan = _gen_scan(rng, patient.id, ts, prev_score)
             db.add(scan)
             db.flush()
             prev_score = scan.ai_health_score
-            prev_conf = scan.ai_confidence
 
             # Occasionally generate an alert
             if scan.heart_rate and scan.heart_rate > 92:

@@ -3,16 +3,15 @@ import { usePatients } from '../hooks/usePatients'
 import { useAnalytics } from '../hooks/useAnalytics'
 import TrendBadge from '../components/TrendBadge'
 import DailyAvgChart from '../components/charts/DailyAvgChart'
-import SDNNChart from '../components/charts/SDNNChart'
-import RMSSDChart from '../components/charts/RMSSDChart'
 import { useScans } from '../hooks/useScans'
-import { formatHR, formatRR, formatHRV } from '../utils/formatters'
+import { formatHR } from '../utils/formatters'
 
 export default function AnalyticsPage() {
   const { patients } = usePatients()
   const [selectedId, setSelectedId] = useState('')
   const { analytics, loading } = useAnalytics(selectedId)
-  const { scans } = useScans(selectedId, { sort: 'asc', pageSize: 100 })
+  const { scans: rawScans } = useScans(selectedId, { sort: 'desc', pageSize: 100 })
+  const scans = [...rawScans].reverse()
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -46,9 +45,6 @@ export default function AnalyticsPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               ['Avg HR', formatHR(analytics.averages?.heart_rate), 'text-rose-400'],
-              ['Avg RR', formatRR(analytics.averages?.respiration_rate), 'text-cyan-400'],
-              ['Avg SDNN', formatHRV(analytics.averages?.sdnn), 'text-violet-400'],
-              ['Avg RMSSD', formatHRV(analytics.averages?.rmssd), 'text-amber-400'],
               ['Highest HR', formatHR(analytics.highest_hr), 'text-rose-300'],
               ['Lowest HR', formatHR(analytics.lowest_hr), 'text-emerald-400'],
               ['Weekly HR', formatHR(analytics.weekly_hr), 'text-brand-800'],
@@ -67,8 +63,6 @@ export default function AnalyticsPage() {
             <div className="space-y-3">
               {[
                 ['Heart Rate', analytics.trends?.hr, analytics.hr_summary],
-                ['Respiration', analytics.trends?.rr, analytics.rr_summary],
-                ['HRV (SDNN)', analytics.trends?.hrv, analytics.hrv_summary],
               ].map(([label, badge, summary]) => (
                 <div key={label} className="flex items-start gap-4 py-3 border-b border-brand-900/10 last:border-0">
                   <div className="w-28 flex-shrink-0">
@@ -86,18 +80,6 @@ export default function AnalyticsPage() {
             <div className="glass-card p-5">
               <p className="section-title">Daily Average HR</p>
               <DailyAvgChart data={analytics.daily_hr} label="Avg HR (BPM)" color="#f43f5e" />
-            </div>
-            <div className="glass-card p-5">
-              <p className="section-title">Daily Average RR</p>
-              <DailyAvgChart data={analytics.daily_rr} label="Avg RR (br/min)" color="#06b6d4" />
-            </div>
-            <div className="glass-card p-5">
-              <p className="section-title">SDNN History</p>
-              <SDNNChart scans={scans} />
-            </div>
-            <div className="glass-card p-5">
-              <p className="section-title">RMSSD History</p>
-              <RMSSDChart scans={scans} />
             </div>
           </div>
         </>
