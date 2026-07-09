@@ -1,0 +1,31 @@
+2026-07-09 22:55:59,311 | INFO | bcg.main | Starting BCG Healthcare Platform v1.0.0 on port 8001
+2026-07-09 22:55:59,319 | INFO | bcg.seeder | Database already seeded — skipping.
+2026-07-09 22:55:59,319 | INFO | bcg.main | Backend ready. Swagger: http://localhost:8001/docs
+2026-07-09 23:12:45,243 | INFO | bcg.auth | User logged in: admin (role=admin)
+2026-07-09 23:14:28,826 | WARNING | bcg.auth | Failed login attempt for username: shash
+2026-07-09 23:14:34,204 | WARNING | bcg.auth | Failed login attempt for username: shash
+2026-07-09 23:14:42,372 | WARNING | bcg.auth | Failed login attempt for username: shash
+2026-07-09 23:14:49,660 | INFO | bcg.auth | User logged in: admin (role=admin)
+2026-07-09 23:17:23,033 | INFO | bcg.auth | User logged in: admin (role=admin)
+2026-07-09 23:23:59,984 | INFO | bcg.auth | User logged in: admin (role=admin)
+2026-07-09 23:28:16,300 | INFO | bcg.main | Starting BCG Healthcare Platform v1.0.0 on port 8001
+2026-07-09 23:28:16,307 | INFO | bcg.seeder | Seeding demo data into database...
+2026-07-09 23:28:16,854 | INFO | bcg.seeder | Seeded 6 demo patients with scans and 3 users.
+2026-07-09 23:28:16,854 | INFO | bcg.seeder | Default credentials: admin/admin123, doctor1/doctor123, doctor2/doctor456
+2026-07-09 23:28:16,854 | INFO | bcg.main | Backend ready. Swagger: http://localhost:8001/docs
+2026-07-09 23:31:40,594 | INFO | bcg.auth | User logged in: admin (role=admin)
+2026-07-09 23:36:44,458 | INFO | bcg.session | Monitoring session started: patient=2 by admin
+2026-07-09 23:36:50,905 | INFO | bcg.session | Monitoring session stopped (was patient=2) by admin
+2026-07-09 23:36:57,590 | INFO | bcg.session | Monitoring session started: patient=2 by admin
+2026-07-09 23:37:04,575 | INFO | bcg.session | Monitoring session stopped (was patient=2) by admin
+2026-07-09 23:44:48,144 | INFO | bcg.main | Starting BCG Healthcare Platform v1.0.0 on port 8001
+2026-07-09 23:44:48,147 | INFO | bcg.seeder | Database already seeded — skipping.
+2026-07-09 23:44:48,147 | INFO | bcg.main | Backend ready. Swagger: http://localhost:8001/docs
+2026-07-09 23:47:27,033 | INFO | bcg.session | Monitoring session started: patient=1 by admin
+2026-07-09 23:49:11,922 | INFO | bcg.main | Starting BCG Healthcare Platform v1.0.0 on port 8001
+2026-07-09 23:49:11,925 | INFO | bcg.seeder | Database already seeded — skipping.
+2026-07-09 23:49:11,925 | INFO | bcg.main | Backend ready. Swagger: http://localhost:8001/docs
+2026-07-09 23:51:13,313 | INFO | bcg.session | Monitoring session started: patient=4 by admin
+2026-07-09 23:51:24,293 | INFO | httpx | HTTP Request: GET http://127.0.0.1:8002/cam.mjpg "HTTP/1.0 200 OK"
+2026-07-09 23:53:09,284 | INFO | httpx | HTTP Request: GET http://127.0.0.1:8002/cam.mjpg "HTTP/1.0 200 OK"
+2026-07-09 23:57:35,969 | INFO | httpx | HTTP Request: GET http://127.0.0.1:8002/cam.mjpg "HTTP/1.0 200 OK"

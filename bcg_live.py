@@ -17,6 +17,54 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.widgets import Button
 from scipy.signal import butter, filtfilt, find_peaks, detrend
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
+import io
+from PIL import Image
+
+latest_jpeg = None
+
+class CamHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass
+    def do_GET(self):
+        global latest_jpeg
+        if self.path.endswith('.mjpg'):
+            self.send_response(200)
+            self.send_header('Content-type','multipart/x-mixed-replace; boundary=--jpgboundary')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            while True:
+                try:
+                    if latest_jpeg is not None:
+                        self.wfile.write(b"--jpgboundary\r\n")
+                        self.send_header('Content-type','image/jpeg')
+                        self.send_header('Content-length',str(len(latest_jpeg)))
+                        self.end_headers()
+                        self.wfile.write(latest_jpeg)
+                        self.wfile.write(b"\r\n")
+                    import time
+                    time.sleep(0.1)
+                except Exception as e:
+                    break
+        else:
+            self.send_response(200)
+            self.send_header('Content-type','text/html')
+            self.end_headers()
+            self.wfile.write(b'<html><body><img src="/cam.mjpg"/></body></html>')
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    pass
+
+def start_mjpeg_server():
+    try:
+        server = ThreadedHTTPServer(('0.0.0.0', 8002), CamHandler)
+        print("MJPEG Server listening on port 8002...")
+        server.serve_forever()
+    except Exception as e:
+        print(f"Error starting MJPEG Server: {e}")
+
 import smtplib
 from email.message import EmailMessage
 def send_alert_email(subject, body):
@@ -245,6 +293,7 @@ def tcp_client_reader(esp_ip, port, csv_path):
         csv_writer.writerow(['time_ms', 'ax', 'ay', 'az', 'occupancy', 'temp', 'humidity'])
         csv_file.flush()
 
+    first_attempt = True
     while True:
         try:
             print(f"Connecting to ESP32 TCP Server at {esp_ip}:{port}...")
@@ -258,9 +307,15 @@ def tcp_client_reader(esp_ip, port, csv_path):
                 active_client_socket = client_sock
                 
             handle_client_connection(client_sock, csv_writer, csv_file)
+            first_attempt = False
             
         except Exception as e:
-            print(f"Connection error or disconnected: {e}. Retrying in 3 seconds...")
+            print(f"Connection error or disconnected: {e}.")
+            if first_attempt:
+                print("Falling back to simulation (could not connect within 5 seconds).")
+                simulated_data_generator(csv_path)
+                return
+            print("Retrying in 3 seconds...")
             time.sleep(3)
         finally:
             with client_lock:
@@ -358,7 +413,12 @@ def main():
         thread = threading.Thread(target=tcp_server_reader, args=(args.host, args.port, args.log_file), daemon=True)
     thread.start()
     
+    
+    mjpeg_thread = threading.Thread(target=start_mjpeg_server, daemon=True)
+    mjpeg_thread.start()
+    
     print("Initializing signal buffers and displaying dashboard...")
+
         
     plt.style.use('dark_background')
     
@@ -897,9 +957,25 @@ def main():
             f"  {alert_str}\n"
             f"─────────────────────────────────────────\n"
         )
+        
         panel_text.set_text(panel_content)
         
-        return (line_raw_x, line_raw_y, line_raw_z, line_filt_x, line_filt_y, line_filt_z, 
+        global latest_jpeg
+        try:
+            fig.canvas.draw()
+            rgba_buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
+            w, h = fig.canvas.get_width_height()
+            pixel_ratio = int((rgba_buf.size / (w * h * 4)) ** 0.5)
+            rgba = rgba_buf.reshape((h * pixel_ratio, w * pixel_ratio, 4))
+            img = Image.fromarray(rgba, 'RGBA').convert('RGB')
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG', quality=65)
+            latest_jpeg = buf.getvalue()
+        except Exception as e:
+            print("JPEG Capture Error:", e)
+            
+        return (line_raw_x,
+ line_raw_y, line_raw_z, line_filt_x, line_filt_y, line_filt_z, 
                 line_filt_mag, peaks_scatter, line_fft_best, line_fft_mag)
 
     ani = animation.FuncAnimation(fig, update_plot, interval=100, blit=False, cache_frame_data=False)

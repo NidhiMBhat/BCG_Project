@@ -1,0 +1,4 @@
+/Users/shash/Downloads/IoT/BCG_Project/bcg_live.py:965: UserWarning: Glyph 65039 (\N{VARIATION SELECTOR-16}) missing from font(s) DejaVu Sans Mono.
+  fig.canvas.draw()
+/Users/shash/Downloads/IoT/BCG_Project/bcg_live.py:982: UserWarning: Glyph 65039 (\N{VARIATION SELECTOR-16}) missing from font(s) DejaVu Sans Mono.
+  plt.show()
