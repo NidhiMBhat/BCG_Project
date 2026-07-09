@@ -1,114 +1,164 @@
-# Contactless Ballistocardiography (BCG) Monitoring System
+# 🩺 Contactless Ballistocardiography (BCG) Monitoring System
 
-A contactless, accelerometer-based heart-rate (BPM) and Heart Rate Variability (HRV) analysis pipeline and real-time dashboard designed for an MPU6050 accelerometer connected to an ESP32.
-
----
-
-## 🛠️ Hardware Requirements & Configuration
-
-For reliable BCG extraction, the ESP32 firmware should be configured as follows:
-1. **Accelerometer Scale**: Set to $\pm$ 2g range to maximize measurement resolution:
-   ```cpp
-   mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_2);
-   ```
-2. **Digital Low-Pass Filter (DLPF)**: Enable the on-chip low-pass filter at 10 Hz (or 5 Hz) to suppress high-frequency electronic noise:
-   ```cpp
-   mpu.setDLPFMode(MPU6050_DLPF_BW_10);
-   ```
-3. **Sampling Rate**: Sample at a fixed **100 Hz rate** using a `micros()` loop to ensure uniform time intervals.
-4. **Mechanical Coupling**: Mount the MPU6050 accelerometer **rigidly** to the solid frame or underside of the seat back/panel. Avoid mounting on soft fabrics or cushions which dampen micro-vibrations.
+An end-to-end, contactless, accelerometer-based heart-rate (BPM) and Heart Rate Variability (HRV) analysis pipeline, real-time edge gateway, FastAPI backend, and interactive React dashboard. The system processes micro-vibrations captured by an MPU6050 accelerometer connected to an ESP32, and employs a deep learning classifier to predict cardiac rhythm abnormalities.
 
 ---
 
-## 🚀 Getting Started
+## 🗺️ System Architecture & Data Flow
 
-### 1. Installation
-Install the necessary Python dependencies:
-```bash
-pip install -r requirements.txt
+Below is the high-level architecture showing how telemetry travels from the physical sensor (or simulator) to the persistent database and frontend dashboard.
+
+```mermaid
+graph TD
+    A[ESP32 + MPU6050 Sensor] -- Hardware Serial --> B[Edge Gateway: edge_gateway.py]
+    C[Simulation Mode] -- Simulated Telemetry --> B
+    B -- WebSockets /ws/device --> D[FastAPI Backend: server/main.py]
+    
+    subgraph FastAPI Backend Server
+        D --> E[BCGProcessor: server/processor.py]
+        D --> F[Write Queue: Queue]
+        F -- Batch Insert --> G[(SQLite / Postgres DB)]
+        E -- Signal Processing & CNN Inference --> H[Broadcast Worker]
+    end
+
+    H -- WebSockets /ws/client --> I[Vite/React Dashboard]
+    I -- Control Commands --> D
+    D -- Forward Commands --> B
 ```
 
-### 2. Post-Hoc Analysis (`bcg_pipeline.py`)
-Processes a completed recording CSV file, designs a 0.8–4.0 Hz Butterworth bandpass filter, performs FFT frequency analysis, calculates HRV metrics, evaluates the best axis based on a Signal Quality Score (SQS), and exports plots.
+---
 
-**Run command**:
+## 🤖 For AI Assistant Agents (Context & System Knowledge)
+
+This section provides quick context for LLM coding assistants modifying or debugging this project.
+
+### 1. Key Component Layout
+* **Edge Streamer**: `edge_gateway.py` handles serial port connection at 115200 baud, cleans raw strings, parses data, and pipes it via WebSockets. It also supports simulated bradycardia (`B`), tachycardia (`T`), and normal (`N`) data modes.
+* **FastAPI Backend Server**: Located in `/server`.
+  * `server/main.py`: Sets up the WebSocket routes (`/ws/device` and `/ws/client`), manages batch database insertions using an asynchronous queue, and broadcasts processed data at 10 Hz.
+  * `server/processor.py`: Core signal processing logic. Uses `scipy.signal` to filter noise, detect peaks, compute FFT, and determine signal quality.
+  * `server/db.py`: Connects to SQLite (locally as `bcg_telemetry.db`) or PostgreSQL (if `DATABASE_URL` is set).
+* **Vite React Frontend**: Located in `/frontend`. Connects to `/ws/client` to render real-time plots, metrics, AI status, and send command overrides.
+* **Local Visualization/Simulation Tool**: `bcg_live.py` is a standalone script that runs a local visualizer/plotter for debugging and quick tests.
+* **Deep Learning Module**: Located in `/training` and `/inference`.
+  * `training/dataset_preparation.py`: Prepares training sets using MIT-BIH recordings.
+  * `training/train_cnn.py`: Trains a 1D Convolutional Neural Network.
+  * `inference/cnn_inference.py`: Handles model execution.
+
+### 2. Analytical Signal Processing Pipeline
+In `server/processor.py`:
+1. **Detrending**: Linear trend removal via `scipy.signal.detrend`.
+2. **Bandpass Filtering**: 4th-order Butterworth bandpass filter from **0.8 Hz to 4.0 Hz** (cardiac frequency band).
+3. **Signal Quality Score (SQS)**: Calculated as:
+   $$\text{SQS} = \frac{\text{Cardiac Peak Frequency Magnitude}}{\text{Mean High-frequency Noise Magnitude (4.0–12.0 Hz)} + 1\times 10^{-5}}$$
+4. **Channel Selection**: Automatically picks the best physical axis (`ax`, `ay`, `az`) based on the highest SQS score.
+5. **Peak Detection**: `scipy.signal.find_peaks` with dynamic prominence ($0.25 \times \sigma$) and minimum distance ($0.22 \times f_s$) for calculating heart rate stability.
+
+---
+
+## 👥 For Users (Installation & Operations)
+
+### 1. Hardware Requirements & Mounting
+* **MCU & Sensor**: ESP32 connected to an MPU6050 accelerometer.
+* **Firmware settings**:
+  * Scale: $\pm 2g$ (`MPU6050_ACCEL_FS_2`) to maximize sensitivity.
+  * Low-Pass Filter: 10 Hz or 5 Hz DLPF (`MPU6050_DLPF_BW_10`) to eliminate high-frequency noise.
+  * Sampling Rate: Stable **100 Hz** acquisition.
+* **Mechanical Mounting**: Mount the sensor **rigidly** to a structural surface (e.g., underneath a seat). Avoid soft cushions.
+
+### 2. Setup & Installation
+1. Install Python 3.8+ dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Navigate to and set up the Frontend React app:
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+### 3. Running the Systems
+
+#### Standalone Post-Hoc Analysis Pipeline
+To analyze pre-recorded data in a CSV file:
 ```bash
 python bcg_pipeline.py --input bcg_data.csv --output_dir results/
 ```
 
-This generates:
-* `results/raw_axes.png` - Visualizes AX, AY, and AZ signals.
-* `results/filtered_peaks.png` - Plots filtered axes and highlights detected beats on the best channel.
-* `results/fft_spectra.png` - Frequency spectra for all channels.
-* `results/bcg_3axis_report.md` - Complete quality analysis and heart rate statistics.
+#### Running the Full Stack (Cloud Mode)
+1. **Start the FastAPI Backend**:
+   ```bash
+   python -m server.main
+   ```
+2. **Start the Edge Gateway** (streams data to server):
+   * *Simulation Mode*:
+     ```bash
+     python edge_gateway.py --mode sim
+     ```
+   * *Physical Hardware Mode*:
+     ```bash
+     python edge_gateway.py --mode serial --port COM5 --baud 115200
+     ```
+3. **Start the Web Dashboard**:
+   ```bash
+   cd frontend
+   npm run dev
+   ```
 
----
-
-## 📊 Live Rolling Dashboard (`bcg_live.py`)
-
-The dynamic dashboard displays raw signals, filtered channels, active FFT spectra, and real-time health-monitoring diagnostics.
-
-### Upgraded AI Visual Cards
-- **AI Rhythm Prediction**: Displays current classification: **NORMAL** (Green status), **BRADYCARDIA** (Red alert), or **TACHYCARDIA** (Red alert).
-- **AI Confidence**: Displays classification confidence from 0% to 100%.
-- **Signal Quality (SQS)**: Shows signal-to-noise quality score.
-
-*Note: AI classification only triggers when occupancy is detected and a full 10-second data window is available. Otherwise, cards display "Waiting for Data".*
-
-### Mode A: Monitor a Growing CSV (Simulation / Live Logging)
-If you are logging raw serial data into a CSV in the background:
+#### Standalone PyQt Local Visualizer
+If you do not want to run the web server and web browser:
 ```bash
+# Monitor raw data logging
 python bcg_live.py --mode file --file bcg_data.csv --window 10
-```
 
-### Mode B: Direct Serial Connection
-Connect directly to the live ESP32 serial stream (does not require external logger scripts). It will stream the data, run the visualizer, and simultaneously log raw readings to a CSV in the background:
-```bash
+# Stream from live serial port directly
 python bcg_live.py --mode serial --port COM5 --baud 115200 --window 10 --log_file live_bcg_output.csv
 ```
 
 ---
 
-## 🧠 Deep Learning Classifier Module
+## 💻 For Developers (Extending the Project)
 
-The system uses a 1D Convolutional Neural Network (CNN) trained on the MIT-BIH Arrhythmia Database to categorize heart rhythms in real time.
+### 1. Database Schema
+The database connects to PostgreSQL if the `DATABASE_URL` environment variable is set, otherwise falling back to SQLite (`bcg_telemetry.db`).
 
-### 1. Dataset Preparation
-Downloads MIT-BIH records, segments them into 10-second windows resampled to 100 Hz, labels them based on annotations, and saves `X.npy` and `y.npy` to `/data`:
-```bash
-python training/dataset_preparation.py
-```
+#### Telemetry Table (`bcg_telemetry`)
+| Column | Type (PostgreSQL / SQLite) | Description |
+| :--- | :--- | :--- |
+| `id` | SERIAL / INTEGER PRIMARY KEY | Autoincrementing record ID |
+| `time_ms` | BIGINT / INTEGER | Device timestamp in milliseconds |
+| `ax` | REAL | Raw X-axis accelerometer reading |
+| `ay` | REAL | Raw Y-axis accelerometer reading |
+| `az` | REAL | Raw Z-axis accelerometer reading |
+| `occupancy` | INT / INTEGER | Binary occupancy flag (0 = empty, 1 = occupied) |
+| `temp` | REAL | Sensor temperature in °C |
+| `humidity`| REAL | Sensor relative humidity in % |
+| `created_at` | TIMESTAMP / DATETIME | Server ingestion timestamp |
 
-### 2. CNN Model Training
-Loads prepared data, compiles the Conv1D classifier, trains with early stopping and learning rate reduction callbacks, and outputs evaluation graphs and metrics reports:
-```bash
-python training/train_cnn.py
-```
-This saves the trained networks to:
-- `/models/cnn_model.keras`
-- `/models/cnn_model.h5`
+#### Predictions Table (`ai_predictions`)
+| Column | Type (PostgreSQL / SQLite) | Description |
+| :--- | :--- | :--- |
+| `id` | SERIAL / INTEGER PRIMARY KEY | Autoincrementing prediction ID |
+| `time_ms` | BIGINT / INTEGER | Millisecond timestamp of data window |
+| `prediction` | VARCHAR(50) / TEXT | Predicted state (`NORMAL`, `BRADYCARDIA`, `TACHYCARDIA`) |
+| `confidence` | REAL | Classifier model confidence (0.0 to 1.0) |
+| `best_channel` | VARCHAR(10) / TEXT | Accelerometer channel used for the inference |
+| `created_at` | TIMESTAMP / DATETIME | Record creation timestamp |
 
-Evaluation performance plots are placed in `/results`.
+### 2. Deep Learning Classifier Training
+The classifier is a 1D CNN trained on the MIT-BIH Arrhythmia Database.
 
-### 3. Model Inference Engine
-Loads `cnn_model.keras` and handles real-time window prediction, returning labeled classification and prediction confidence values.
+1. **Acquire & Prep Dataset**:
+   ```bash
+   python training/dataset_preparation.py
+   ```
+   *Downloads ECG records, segments them into 10-second windows resampled to 100 Hz, filters noise, and exports `X.npy` and `y.npy` to the `/data` folder.*
 
----
+2. **Train Model**:
+   ```bash
+   python training/train_cnn.py
+   ```
+   *Compiles the Conv1D classifier, runs training with Early Stopping, and outputs `/models/cnn_model.keras`.*
 
-## 📁 Repository Structure
-
-* [bcg_pipeline.py](file:///Users/shash/Downloads/IoT/BCG_Project/bcg_pipeline.py) - Post-hoc diagnostic analysis script.
-* [bcg_live.py](file:///Users/shash/Downloads/IoT/BCG_Project/bcg_live.py) - Live rolling dashboard with AI integration.
-* [process.py](file:///Users/shash/Downloads/IoT/BCG_Project/process.py) - Basic background serial logging script.
-* [requirements.txt](file:///Users/shash/Downloads/IoT/BCG_Project/requirements.txt) - Python package dependencies.
-* `/training`
-  * [dataset_preparation.py](file:///Users/shash/Downloads/IoT/BCG_Project/training/dataset_preparation.py) - Script to acquire and prepare MIT-BIH records.
-  * [train_cnn.py](file:///Users/shash/Downloads/IoT/BCG_Project/training/train_cnn.py) - Build, train, and validate the Conv1D model.
-* `/inference`
-  * [cnn_inference.py](file:///Users/shash/Downloads/IoT/BCG_Project/inference/cnn_inference.py) - Real-time wrapper to run model predictions.
-* `/models`
-  * `cnn_model.keras` / `cnn_model.h5` - Saved deep learning models.
-* `/data`
-  * `X.npy` / `y.npy` - Preprocessed numpy matrices for neural network training.
-* `/results` - Model training plots, report summaries, and performance evaluation metrics.
-* `.gitignore` - Standard configuration ignoring compiled cache and local logs.
+### 3. Extending the APIs
+New endpoints can be added in `server/main.py`. The WebSockets architecture allows adding custom JSON message types to send parameters down to the gateway, adjust filters dynamically, or flag alert states.
